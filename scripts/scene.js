@@ -289,7 +289,14 @@ export function spawnCrab() {
     eyes.position.set(0, 0.6, 0.4);
     mesh.add(eyes);
 
-    const crab = { type: 'crab', mesh: mesh, vel: new THREE.Vector3(speed * dir, 0, 0), t: 0 };
+    const crab = {
+        type: 'crab',
+        mesh: mesh,
+        vel: new THREE.Vector3(speed * dir, 0, 0),
+        t: 0,
+        swayAmp: 2.5 + Math.random() * 2,
+        swaySpeed: 4.5 + Math.random() * 1.5
+    };
     gameObjects.push(crab);
     return crab;
 }
@@ -313,11 +320,18 @@ export function spawnVolcanoRock() {
 }
 
 export function flashHit(mesh) {
-    const body = mesh.body || mesh.children[0];
-    const original = playerColors[mesh.playerIndex] || defaultColors[mesh.playerIndex];
-    body.material.color.setHex(0xffffff);
+    const parts = mesh.tankParts && mesh.tankParts.length ? mesh.tankParts : [mesh.body || mesh.children[0]].filter(Boolean);
+    const originalColor = playerColors[mesh.playerIndex] || defaultColors[mesh.playerIndex];
+    const originalPalette = parts.map(p => p?.material?.color?.getHex());
+
+    parts.forEach(p => p?.material?.color?.setHex(0xffffff));
     setTimeout(() => {
-        body.material.color.set(original || 0x00ffaa);
+        parts.forEach((p, idx) => {
+            if (!p?.material?.color) return;
+            const fallback = originalColor ?? originalPalette[idx] ?? 0x00ffaa;
+            const target = originalPalette[idx] ?? fallback;
+            p.material.color.set(target ?? 0x00ffaa);
+        });
     }, 100);
 }
 

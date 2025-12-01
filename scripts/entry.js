@@ -159,7 +159,9 @@ function setupControllerButtons(prefillCode) {
 
         const showAction = config.showAction !== false;
         if (fireBtn) {
-            fireBtn.style.display = showAction ? 'inline-block' : 'none';
+            fireBtn.style.display = 'inline-block';
+            fireBtn.style.visibility = showAction ? 'visible' : 'hidden';
+            fireBtn.style.pointerEvents = showAction ? 'auto' : 'none';
             fireBtn.textContent = config.actionLabel || 'Action';
         }
 
