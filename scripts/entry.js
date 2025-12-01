@@ -60,7 +60,11 @@ function setupControllerButtons(prefillCode) {
             if (readyBtn) readyBtn.disabled = false;
             statusLine.textContent = `Joined as ${name}. Tap ready while waiting for host.`;
             if (joinCard) joinCard.style.display = 'none';
-            if (controls) controls.style.display = 'block';
+            if (controls) {
+                controls.style.display = 'block';
+                // Hide gamepad in lobby, only show ready button
+                if (pad) pad.style.display = 'none';
+            }
         } catch (err) {
             console.error(err);
             statusLine.textContent = 'Could not join. Try a different nickname?';
@@ -100,7 +104,7 @@ function setupControllerButtons(prefillCode) {
         const offsetY = Math.sin(angle) * dist;
         thumb.style.transform = `translate(calc(-50% + ${offsetX}px), calc(-50% + ${offsetY}px))`;
         state.x = Math.max(-1, Math.min(1, offsetX / maxRadius));
-        state.z = Math.max(-1, Math.min(1, -offsetY / maxRadius));
+        state.z = Math.max(-1, Math.min(1, offsetY / maxRadius));
         sendState();
     };
 
@@ -143,6 +147,11 @@ function setupControllerButtons(prefillCode) {
         if (screen) screen.classList.add('started');
         if (pad) pad.style.display = 'flex';
         if (statusLine) statusLine.textContent = 'Game started! Use the controller to play.';
+        // Hide join card and status, keep only header with name/party code
+        const joinCard = document.getElementById('controller-join');
+        const status = document.getElementById('controller-status');
+        if (joinCard) joinCard.style.display = 'none';
+        if (status) status.style.display = 'none';
     });
 }
 
@@ -166,6 +175,25 @@ function setupLanding() {
         mountControllerUI();
         setupControllerButtons();
     });
+}
+
+export function resetControllerUIForLobby() {
+    const pad = document.getElementById('controller-pad');
+    const joinCard = document.getElementById('controller-join');
+    const status = document.getElementById('controller-status');
+    const readyBtn = document.getElementById('ready-toggle');
+    
+    if (pad) pad.style.display = 'none';
+    if (joinCard) joinCard.style.display = 'block';
+    if (status) status.style.display = 'block';
+    
+    // Reset ready button to "waiting" state
+    if (readyBtn) {
+        readyBtn.classList.add('waiting');
+        readyBtn.classList.remove('ready');
+        readyBtn.innerText = 'Tap Ready';
+        readyBtn.disabled = false;
+    }
 }
 
 init();

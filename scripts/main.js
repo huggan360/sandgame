@@ -167,7 +167,7 @@ const GameManager = {
         return 'Drink up!';
     },
 
-    returnToLobby() {
+    async returnToLobby() {
         ui.result.classList.remove('active');
         ui.lobby.classList.add('active');
         setEnvironment('ISLAND');
@@ -176,6 +176,9 @@ const GameManager = {
         this.state = 'LOBBY';
         this.boundaryLimit = 8;
         this.updateHud();
+        // Reset controller UI for lobby
+        const { resetControllerUIForLobby } = await import('./entry.js');
+        resetControllerUIForLobby();
     },
 
     updateHud() {
