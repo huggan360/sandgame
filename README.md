@@ -1,6 +1,6 @@
 # Tropical Sips: Party Island
 
-Open `index.html` in a modern browser to host a quick two-player drinking game night. The experience now uses modular scripts so each minigame can evolve on its own.
+Open `index.html` in a modern browser to host a quick two-player drinking game night. The experience now uses modular scripts so each minigame can evolve on its own. Spin up a party from the lobby to invite up to four phones as controllers—share the link shown in the lobby, wait for everyone to ready up, then start the round from the host screen.
 
 ## Controls
 - **Player 1:** WASD to move, Space to interact/shoot
