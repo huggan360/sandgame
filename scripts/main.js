@@ -20,6 +20,7 @@ const ui = {
     intro: document.getElementById('intro-card'),
     result: document.getElementById('result-card'),
     wheelElement: document.getElementById('wheel'),
+    wheelLegend: document.getElementById('wheel-legend'),
     timer: document.getElementById('game-timer'),
     title: document.getElementById('game-title'),
     desc: document.getElementById('game-desc'),
@@ -44,6 +45,17 @@ const minigames = {
     'SKY': new SkySlamGame(),
     'FLAPPY': new FlappyFlockGame(),
     'RUNNER': new RoadRunnerGame()
+};
+
+const minigameVisuals = {
+    'BRAWL': { title: 'Tiki Brawl', color: '#FF512F' },
+    'COLLECT': { title: 'Pineapple Rush', color: '#FFD700' },
+    'VOLCANO': { title: 'Magma Madness', color: '#800080' },
+    'CRAB': { title: 'Crab Dodge', color: '#FFA040' },
+    'TANK': { title: 'Tank Takedown', color: '#57c7ff' },
+    'SKY': { title: 'Sky Rink Showdown', color: '#8ECBFF' },
+    'FLAPPY': { title: 'Flappy Flock', color: '#00BCD4' },
+    'RUNNER': { title: 'Boardwalk Dash', color: '#4CAF50' }
 };
 
 const GameManager = {
@@ -81,14 +93,18 @@ const GameManager = {
         this.state = 'STARTING';
         ui.lobby.classList.remove('active');
         ui.wheel.classList.add('active');
-        const chosenGame = this.chooseNextGame();
-        const chosenIndex = minigameOrder.indexOf(chosenGame);
-        const slice = 360 / minigameOrder.length;
+        const wheelOptions = this.getAvailableGames();
+        this.renderWheel(wheelOptions);
+        const chosenGame = this.chooseNextGame(wheelOptions);
+        const chosenIndex = wheelOptions.indexOf(chosenGame);
+        const slice = 360 / wheelOptions.length;
         const randomOffset = Math.random() * slice;
         const targetAngle = chosenIndex * slice + randomOffset;
         const extraSpins = 5 + Math.random() * 2;
         const startRotation = this.currentRotation;
-        const finalRotation = startRotation + extraSpins * 360 + targetAngle;
+        const normalizedStart = ((startRotation % 360) + 360) % 360;
+        const rotationDelta = ((targetAngle - normalizedStart + 360) % 360) + extraSpins * 360;
+        const finalRotation = startRotation + rotationDelta;
         const duration = 3800;
         const start = performance.now();
 
@@ -96,7 +112,7 @@ const GameManager = {
             const t = Math.min((now - start) / duration, 1);
             const easeOut = 1 - Math.pow(1 - t, 3);
             const angle = startRotation + (finalRotation - startRotation) * easeOut;
-            this.currentRotation = angle;
+            this.currentRotation = angle % 360;
             ui.wheelElement.style.transform = `rotate(-${angle}deg)`;
             if (t < 1) requestAnimationFrame(animateSpin);
             else this.resolveWheel(chosenGame);
@@ -110,13 +126,56 @@ const GameManager = {
         this.setupMinigame(type);
     },
 
-    chooseNextGame() {
-        const available = minigameOrder.filter(type => !this.recentGames.includes(type));
-        const pool = available.length ? available : minigameOrder;
+    getAvailableGames() {
+        return minigameOrder.filter(type => !this.recentGames.includes(type));
+    },
+
+    chooseNextGame(availablePool = this.getAvailableGames()) {
+        const pool = availablePool.length ? availablePool : minigameOrder;
         const type = pool[Math.floor(Math.random() * pool.length)];
         this.recentGames.push(type);
         if (this.recentGames.length > 3) this.recentGames.shift();
         return type;
+    },
+
+    renderWheel(options) {
+        const slice = 360 / options.length;
+        const gradientParts = options.map((type, idx) => {
+            const start = idx * slice;
+            const end = start + slice;
+            return `${minigameVisuals[type].color} ${start}deg ${end}deg`;
+        }).join(', ');
+
+        ui.wheelElement.style.background = `conic-gradient(${gradientParts})`;
+        ui.wheelElement.innerHTML = '';
+
+        const fragment = document.createDocumentFragment();
+        options.forEach((type, idx) => {
+            const angle = idx * slice + slice / 2;
+            const label = document.createElement('div');
+            label.className = 'wheel-label';
+            label.style.setProperty('--angle', `${angle}deg`);
+            label.style.setProperty('--accent', minigameVisuals[type].color);
+            label.innerText = minigameVisuals[type].title;
+            fragment.appendChild(label);
+        });
+
+        ui.wheelElement.appendChild(fragment);
+
+        if (ui.wheelLegend) {
+            ui.wheelLegend.innerHTML = '';
+            const legendFrag = document.createDocumentFragment();
+            options.forEach(type => {
+                const item = document.createElement('div');
+                item.className = 'legend-item';
+                const swatch = document.createElement('span');
+                swatch.style.background = minigameVisuals[type].color;
+                item.appendChild(swatch);
+                item.appendChild(document.createTextNode(minigameVisuals[type].title));
+                legendFrag.appendChild(item);
+            });
+            ui.wheelLegend.appendChild(legendFrag);
+        }
     },
 
     setupMinigame(type) {
