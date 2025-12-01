@@ -2,11 +2,12 @@ import { Input } from './input.js';
 import {
     scene, camera, renderer, mats, p1Mesh, p2Mesh,
     gameObjects, resetPlayers, clearGameObjects, removeObj, flashHit,
-    setArenaVisible, updateCamera
+    setEnvironment, updateCamera
 } from './scene.js';
 import { BrawlGame } from './minigames/brawl.js';
 import { SurvivalGame } from './minigames/survival.js';
 import { CollectGame } from './minigames/collect.js';
+import { VolcanoGame } from './minigames/volcano.js'; // Import new game
 
 const ui = {
     lobby: document.getElementById('lobby-card'),
@@ -28,7 +29,8 @@ const ui = {
 const minigames = {
     'BRAWL': new BrawlGame(),
     'SURVIVAL': new SurvivalGame(),
-    'COLLECT': new CollectGame()
+    'COLLECT': new CollectGame(),
+    'VOLCANO': new VolcanoGame()
 };
 
 const GameManager = {
@@ -55,9 +57,12 @@ const GameManager = {
 
     resolveWheel(finalAngle) {
         let type = '';
-        if (finalAngle < 120) type = 'BRAWL';
-        else if (finalAngle < 240) type = 'SURVIVAL';
-        else type = 'COLLECT';
+        // 4 Games = 90 degrees each
+        if (finalAngle < 90) type = 'BRAWL';
+        else if (finalAngle < 180) type = 'SURVIVAL';
+        else if (finalAngle < 270) type = 'COLLECT';
+        else type = 'VOLCANO';
+        
         ui.wheel.classList.remove('active');
         this.setupMinigame(type);
     },
@@ -71,7 +76,11 @@ const GameManager = {
         ui.title.innerText = info.title;
         ui.desc.innerText = info.description;
         ui.penalty.innerText = info.penalty;
-        setArenaVisible(true);
+        
+        // Handle Scene Switching
+        if(type === 'VOLCANO') setEnvironment('VOLCANO');
+        else setEnvironment('ARENA');
+
         resetPlayers();
         clearGameObjects();
         p1Mesh.position.set(-5, 0.1, 0);
@@ -99,6 +108,7 @@ const GameManager = {
         this.state = 'PLAYING';
         this.timer = 0;
         this.currentMinigame.start(p1Mesh, p2Mesh);
+        this.updateHud();
     },
 
     endGame(winner) {
@@ -108,14 +118,10 @@ const GameManager = {
         let penalty = '';
         if(winner === 1) {
             text = 'PLAYER 1 WINS!';
-            if(this.currentGame === 'BRAWL') penalty = 'Player 2 drinks 1 sip';
-            else if(this.currentGame === 'SURVIVAL') penalty = 'Player 2 drinks 2 sips';
-            else if(this.currentGame === 'COLLECT') penalty = `Player 2 drinks ${Math.max(1, 5 - this.p2Score)} sips`;
+            penalty = this.getPenalty(2);
         } else if (winner === 2) {
             text = 'PLAYER 2 WINS!';
-            if(this.currentGame === 'BRAWL') penalty = 'Player 1 drinks 1 sip';
-            else if(this.currentGame === 'SURVIVAL') penalty = 'Player 1 drinks 2 sips';
-            else if(this.currentGame === 'COLLECT') penalty = `Player 1 drinks ${Math.max(1, 5 - this.p1Score)} sips`;
+            penalty = this.getPenalty(1);
         } else {
             text = 'DRAW!';
             penalty = 'Everyone drinks 1 sip';
@@ -125,10 +131,18 @@ const GameManager = {
         ui.result.classList.add('active');
     },
 
+    getPenalty(loser) {
+        if(this.currentGame === 'BRAWL') return `Player ${loser} drinks 1 sip`;
+        if(this.currentGame === 'SURVIVAL') return `Player ${loser} drinks 2 sips`;
+        if(this.currentGame === 'VOLCANO') return `Player ${loser} takes a SHOT (or 3 sips)`;
+        if(this.currentGame === 'COLLECT') return `Player ${loser} drinks diff score`;
+        return 'Drink up!';
+    },
+
     returnToLobby() {
         ui.result.classList.remove('active');
         ui.lobby.classList.add('active');
-        setArenaVisible(false);
+        setEnvironment('ISLAND');
         clearGameObjects();
         resetPlayers();
         this.state = 'LOBBY';
@@ -137,11 +151,11 @@ const GameManager = {
 
     updateHud() {
         if(this.currentGame === 'COLLECT') {
-            ui.p1Hud.innerText = `P1 (Green) Score: ${this.p1Score}`;
-            ui.p2Hud.innerText = `P2 (Pink) Score: ${this.p2Score}`;
-        } else if(this.currentGame === 'BRAWL') {
-            ui.p1Hud.innerText = `P1 (Green) HP: ${p1Mesh.hp || 3}`;
-            ui.p2Hud.innerText = `P2 (Pink) HP: ${p2Mesh.hp || 3}`;
+            ui.p1Hud.innerText = `P1 Score: ${this.p1Score}`;
+            ui.p2Hud.innerText = `P2 Score: ${this.p2Score}`;
+        } else if(this.currentGame === 'BRAWL' || this.currentGame === 'VOLCANO') {
+            ui.p1Hud.innerText = `P1 HP: ${p1Mesh.hp || 0}`;
+            ui.p2Hud.innerText = `P2 HP: ${p2Mesh.hp || 0}`;
         } else {
             ui.p1Hud.innerText = 'P1 (Green)';
             ui.p2Hud.innerText = 'P2 (Pink)';
@@ -157,6 +171,8 @@ function clampPlayers(limit) {
 function processObjects(dt) {
     for (let i = gameObjects.length - 1; i >= 0; i--) {
         const obj = gameObjects[i];
+        
+        // --- PROJECTILES (BRAWL) ---
         if (obj.type === 'projectile') {
             obj.mesh.position.add(obj.vel.clone().multiplyScalar(dt));
             let hitCrate = false;
@@ -179,6 +195,7 @@ function processObjects(dt) {
                 removeObj(i);
             }
         }
+        // --- COCONUTS (SURVIVAL) ---
         else if (obj.type === 'coconut') {
             obj.mesh.position.y -= (10 + GameManager.timer) * dt;
             if(obj.mesh.position.y < 0) {
@@ -190,6 +207,32 @@ function processObjects(dt) {
             }
             if(obj.shadow) obj.shadow.scale.setScalar(1 + (10 - obj.mesh.position.y)*0.1);
         }
+        // --- MAGMA ROCKS (VOLCANO) ---
+        else if (obj.type === 'magma_rock') {
+            obj.mesh.position.y -= 15 * dt; // Fall fast
+            obj.mesh.rotation.x += dt;
+            obj.mesh.rotation.z += dt;
+            
+            if(obj.mesh.position.y < 0) {
+                const distP1 = obj.mesh.position.distanceTo(p1Mesh.position);
+                const distP2 = obj.mesh.position.distanceTo(p2Mesh.position);
+                
+                // Hit Logic
+                if(distP1 < 1.5 && p1Mesh.stunned <= 0) {
+                    p1Mesh.hp--; p1Mesh.stunned = 1.5; // Stun for 1.5s
+                    flashHit(p1Mesh); GameManager.updateHud();
+                    if(p1Mesh.hp <= 0) GameManager.endGame(2);
+                }
+                if(distP2 < 1.5 && p2Mesh.stunned <= 0) {
+                    p2Mesh.hp--; p2Mesh.stunned = 1.5; 
+                    flashHit(p2Mesh); GameManager.updateHud();
+                    if(p2Mesh.hp <= 0) GameManager.endGame(1);
+                }
+                removeObj(i);
+            }
+            if(obj.shadow) obj.shadow.scale.setScalar(0.5 + (15 - obj.mesh.position.y)*0.1);
+        }
+        // --- PINEAPPLES (COLLECT) ---
         else if (obj.type === 'pineapple') {
             obj.mesh.rotation.y += dt * 2;
             const distP1 = obj.mesh.position.distanceTo(p1Mesh.position);
@@ -219,12 +262,14 @@ function animate(time) {
     const speed = 8 * dt;
 
     if (GameManager.state === 'LOBBY' || GameManager.state === 'PLAYING') {
-        if (p1In.x !== 0 || p1In.z !== 0) {
+        // Player 1 Movement (Blocked if stunned)
+        if ((!p1Mesh.stunned || p1Mesh.stunned <= 0) && (p1In.x !== 0 || p1In.z !== 0)) {
             p1Mesh.position.x += p1In.x * speed;
             p1Mesh.position.z += p1In.z * speed;
             p1Mesh.lookAt(p1Mesh.position.x + p1In.x, p1Mesh.position.y, p1Mesh.position.z + p1In.z);
         }
-        if (p2In.x !== 0 || p2In.z !== 0) {
+        // Player 2 Movement (Blocked if stunned)
+        if ((!p2Mesh.stunned || p2Mesh.stunned <= 0) && (p2In.x !== 0 || p2In.z !== 0)) {
             p2Mesh.position.x += p2In.x * speed;
             p2Mesh.position.z += p2In.z * speed;
             p2Mesh.lookAt(p2Mesh.position.x + p2In.x, p2Mesh.position.y, p2Mesh.position.z + p2In.z);
@@ -235,8 +280,15 @@ function animate(time) {
     if (GameManager.state === 'PLAYING') {
         GameManager.timer += dt;
         ui.timer.innerText = Math.max(0, Math.floor(30 - GameManager.timer)).toString();
+        // Time limit ends game (Player with most HP wins in Volcano/Brawl)
         if(GameManager.timer >= 30 && GameManager.currentGame !== 'COLLECT') {
-            GameManager.endGame(0);
+            if(GameManager.currentGame === 'BRAWL' || GameManager.currentGame === 'VOLCANO') {
+                if(p1Mesh.hp > p2Mesh.hp) GameManager.endGame(1);
+                else if(p2Mesh.hp > p1Mesh.hp) GameManager.endGame(2);
+                else GameManager.endGame(0);
+            } else {
+                GameManager.endGame(0);
+            }
         }
         GameManager.currentMinigame.update(dt, { p1: p1In, p2: p2In }, p1Mesh, p2Mesh, GameManager.timer);
         processObjects(dt);
@@ -247,5 +299,6 @@ function animate(time) {
 }
 
 window.GameManager = GameManager;
+setEnvironment('ISLAND');
 resetPlayers();
 animate(0);

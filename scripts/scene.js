@@ -17,10 +17,6 @@ dirLight.position.set(10, 30, 10);
 dirLight.castShadow = true;
 dirLight.shadow.mapSize.width = 2048;
 dirLight.shadow.mapSize.height = 2048;
-dirLight.shadow.camera.left = -20;
-dirLight.shadow.camera.right = 20;
-dirLight.shadow.camera.top = 20;
-dirLight.shadow.camera.bottom = -20;
 scene.add(dirLight);
 
 // Materials
@@ -34,26 +30,24 @@ export const mats = {
     red: new THREE.MeshStandardMaterial({ color: 0xff3333 }),
     gold: new THREE.MeshStandardMaterial({ color: 0xFFD700, metalness: 0.5, roughness: 0.2 }),
     crate: new THREE.MeshStandardMaterial({ color: 0x8B4513 }),
+    magma: new THREE.MeshStandardMaterial({ color: 0xff4500, emissive: 0xaa0000, roughness: 1 }),
+    obsidian: new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 }),
     shadow: new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3 })
 };
 
-// Environment
+// --- ENVIRONMENTS --- //
+
+// 1. Beach Environment
 export const islandGroup = new THREE.Group();
 scene.add(islandGroup);
 const ocean = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), mats.water);
 ocean.rotation.x = -Math.PI/2;
 ocean.position.y = -0.5;
-scene.add(ocean);
-
+scene.add(ocean); // Keep ocean always, change color later
 const island = new THREE.Mesh(new THREE.CylinderGeometry(14, 14, 1, 32), mats.sand);
 island.position.y = -0.5;
 island.receiveShadow = true;
 islandGroup.add(island);
-
-export const arena = new THREE.Mesh(new THREE.CylinderGeometry(9, 9, 0.5, 32), new THREE.MeshStandardMaterial({color: 0x444444}));
-arena.position.y = 100; // Hidden by default
-arena.receiveShadow = true;
-scene.add(arena);
 
 function createPalm(x, z) {
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.2, 3, 6), mats.wood);
@@ -69,13 +63,27 @@ for(let i=0; i<8; i++) {
     createPalm(Math.cos(a)*10, Math.sin(a)*10);
 }
 
-const totem = new THREE.Group();
-const b1 = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), mats.wood); b1.position.y=0.5;
-const b2 = new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.8), mats.red); b2.position.y=1.4;
-totem.add(b1, b2);
-totem.castShadow = true;
-islandGroup.add(totem);
+// 2. Arena Floor (Standard Minigames)
+export const arena = new THREE.Mesh(new THREE.CylinderGeometry(9, 9, 0.5, 32), new THREE.MeshStandardMaterial({color: 0x444444}));
+arena.position.y = 100; // Hidden by default
+arena.receiveShadow = true;
+scene.add(arena);
 
+// 3. Volcano Environment (New Scene)
+export const volcanoGroup = new THREE.Group();
+volcanoGroup.visible = false;
+scene.add(volcanoGroup);
+
+const volcanoPlatform = new THREE.Mesh(new THREE.CylinderGeometry(8, 6, 2, 8), mats.obsidian);
+volcanoPlatform.position.y = -1;
+volcanoPlatform.receiveShadow = true;
+volcanoGroup.add(volcanoPlatform);
+const lava = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), mats.magma);
+lava.rotation.x = -Math.PI/2;
+lava.position.y = -2;
+volcanoGroup.add(lava);
+
+// Players
 function createPlayerMesh(mat) {
     const group = new THREE.Group();
     const body = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 1.6, 12), mat);
@@ -106,6 +114,8 @@ export function resetPlayers() {
     p2Mesh.rotation.set(0, -Math.PI/2, 0);
     p1Mesh.visible = true;
     p2Mesh.visible = true;
+    p1Mesh.stunned = 0;
+    p2Mesh.stunned = 0;
 }
 
 export function clearGameObjects() {
@@ -124,9 +134,7 @@ export function removeObj(index) {
 }
 
 export function spawnObstacles() {
-    const pos = [
-        {x: -3, z: -3}, {x: 3, z: 3}, {x: -3, z: 3}, {x: 3, z: -3}
-    ];
+    const pos = [{x: -3, z: -3}, {x: 3, z: 3}, {x: -3, z: 3}, {x: 3, z: -3}];
     pos.forEach(p => {
         const mesh = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 1.5), mats.crate);
         mesh.position.set(p.x, 0.75, p.z);
@@ -174,6 +182,24 @@ export function spawnPineapple() {
     gameObjects.push({ type: 'pineapple', mesh: mesh, value: isGolden ? 3 : 1 });
 }
 
+export function spawnVolcanoRock() {
+    const x = (Math.random() - 0.5) * 12;
+    const z = (Math.random() - 0.5) * 12;
+    // Jagged Rock
+    const geom = new THREE.DodecahedronGeometry(0.8, 0); 
+    const mesh = new THREE.Mesh(geom, mats.obsidian);
+    mesh.position.set(x, 15, z); // High up
+    scene.add(mesh);
+
+    const sGeo = new THREE.CircleGeometry(0.8, 16);
+    const shadow = new THREE.Mesh(sGeo, new THREE.MeshBasicMaterial({color: 0xff0000, transparent: true, opacity: 0.5}));
+    shadow.rotation.x = -Math.PI/2;
+    shadow.position.set(x, 0.1, z);
+    scene.add(shadow);
+    
+    gameObjects.push({ type: 'magma_rock', mesh: mesh, shadow: shadow });
+}
+
 export function flashHit(mesh) {
     mesh.children[0].material.color.setHex(0xffffff);
     setTimeout(() => {
@@ -182,11 +208,38 @@ export function flashHit(mesh) {
     }, 100);
 }
 
-export function setArenaVisible(visible) {
-    arena.position.set(0, visible ? 0.1 : 100, 0);
-    islandGroup.visible = !visible;
-    scene.background = new THREE.Color(visible ? 0x203040 : 0x87CEEB);
-    ambientLight.intensity = visible ? 0.8 : 0.6;
+// Controls Environment Switching
+export function setEnvironment(type) {
+    // Reset positions
+    arena.position.y = 100; 
+    islandGroup.visible = false;
+    volcanoGroup.visible = false;
+    
+    // Reset Light & Fog
+    ambientLight.color.setHex(0xffffff);
+    ambientLight.intensity = 0.6;
+    scene.fog.color.setHex(0x87CEEB);
+    scene.background = new THREE.Color(0x87CEEB);
+    dirLight.color.setHex(0xffdfba);
+
+    if (type === 'ISLAND') {
+        islandGroup.visible = true;
+    } 
+    else if (type === 'VOLCANO') {
+        volcanoGroup.visible = true;
+        // Dark Red Atmosphere
+        scene.background = new THREE.Color(0x110000);
+        scene.fog.color.setHex(0x220000);
+        dirLight.color.setHex(0xff4400);
+        ambientLight.color.setHex(0x550000);
+    } 
+    else { // Standard Arena
+        arena.position.y = 0.1;
+        islandGroup.visible = false; // Keep surrounding ocean? Or hide? 
+        // Dark blue space for Arena
+        scene.background = new THREE.Color(0x203040);
+        ambientLight.intensity = 0.8;
+    }
 }
 
 export function updateCamera(state) {
@@ -194,7 +247,7 @@ export function updateCamera(state) {
         camera.position.set(0, 15, 20);
         camera.lookAt(0, 0, 0);
     } else {
-        camera.position.set(0, 18, 12);
+        camera.position.set(0, 20, 10);
         camera.lookAt(0, 0, 0);
     }
 }
