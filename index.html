@@ -64,18 +64,94 @@
             width: 100%;
             height: 100%;
             pointer-events: none;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
             padding: 20px;
             box-sizing: border-box;
         }
 
-        /* HUD */
-        .hud-top { display: flex; justify-content: space-between; width: 100%; }
-        .player-score { font-size: 1.5rem; font-weight: bold; padding: 10px 20px; border-radius: 10px; background: rgba(0,0,0,0.5); color: white; border: 2px solid; }
-        .p1-hud { border-color: #00ffaa; color: #00ffaa; }
-        .p2-hud { border-color: #ff00ff; color: #ff00ff; }
+        .code-chip {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            padding: 10px 14px;
+            border-radius: 14px;
+            background: rgba(9, 18, 36, 0.7);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: #dff6ff;
+            letter-spacing: 0.08em;
+            font-weight: 800;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.35);
+            backdrop-filter: blur(6px);
+            display: none;
+        }
+
+        .code-chip.visible { display: inline-flex; align-items: center; gap: 8px; }
+        .code-dot { width: 10px; height: 10px; border-radius: 50%; background: #31ffb0; box-shadow: 0 0 8px rgba(49,255,176,0.6); }
+
+        .host-sidebar {
+            position: absolute;
+            right: 20px;
+            top: 80px;
+            width: min(260px, 24vw);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            pointer-events: none;
+        }
+
+        .host-card {
+            background: rgba(10, 14, 28, 0.76);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 14px;
+            box-shadow: 0 18px 50px rgba(0,0,0,0.35);
+            backdrop-filter: blur(6px);
+        }
+
+        .host-card h3 {
+            margin: 0 0 10px;
+            letter-spacing: 0.03em;
+            color: #e2f1ff;
+            text-transform: uppercase;
+            font-size: 0.95rem;
+        }
+
+        .host-leaderboard-list { display: flex; flex-direction: column; gap: 10px; }
+        .host-row {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: linear-gradient(145deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+            border: 1px solid rgba(255,255,255,0.08);
+            pointer-events: auto;
+        }
+
+        .host-row-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #f7fbff;
+            font-weight: 700;
+        }
+        .host-row .badge { width: 14px; height: 14px; border-radius: 50%; box-shadow: 0 0 10px currentColor; }
+        .host-row .name { flex: 1; }
+        .ready-chip {
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            letter-spacing: 0.03em;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: #dbeafe;
+        }
+        .ready-chip.ready { background: rgba(49,255,176,0.15); color: #31ffb0; border-color: rgba(49,255,176,0.5); }
+        .ready-chip.waiting { background: rgba(255,186,73,0.15); color: #ffd166; border-color: rgba(255,186,73,0.5); }
+
+        .host-row-meta { display: flex; justify-content: space-between; align-items: center; color: #cbd5e1; font-weight: 600; font-size: 0.9rem; }
+        .current-stat { color: #e5f3ff; font-weight: 700; }
+
+        #game-timer { font-size: 2rem; color: #dff6ff; font-weight: bold; text-shadow: 2px 2px 10px rgba(0,0,0,0.6); display: none; position: absolute; top: 16px; right: 24px; padding: 10px 18px; border-radius: 14px; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.15); }
 
         h1 { margin: 0; font-size: 3rem; color: #FFD700; -webkit-text-stroke: 1px #B8860B; }
         h2 { margin: 10px 0; font-size: 1.5rem; color: white; }
@@ -414,10 +490,14 @@
     </div>
 
     <div id="ui-layer">
-        <div class="hud-top">
-            <div class="player-score p1-hud">P1 (Green)</div>
-            <div id="game-timer">30</div>
-            <div class="player-score p2-hud">P2 (Pink)</div>
+        <div id="party-chip" class="code-chip"><span class="code-dot"></span><span id="party-chip-text">CODE</span></div>
+        <div id="game-timer">30</div>
+
+        <div class="host-sidebar">
+            <div class="host-card">
+                <h3>Players</h3>
+                <div class="host-leaderboard-list" id="host-leaderboard-list"></div>
+            </div>
         </div>
 
         <!-- Wheel UI -->
@@ -457,7 +537,7 @@
             <h1 id="winner-text">PLAYER 1 WINS!</h1>
             <div style="font-size: 4rem; margin: 20px 0;">🍺</div>
             <h2 id="loser-task" style="color: #FF512F;">Loser drinks 1 sip</h2>
-            <button class="btn" onclick="GameManager.returnToLobby()">BACK TO LOBBY</button>
+            <div id="result-ready-status" style="color:#cdd9e5; margin-top: 10px;">Waiting for everyone to ready up…</div>
         </div>
         
         <!-- Game Intro UI -->

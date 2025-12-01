@@ -253,9 +253,14 @@ export function syncLobbyUI() {
     const partyPanel = document.getElementById('party-panel');
     const partyCodeLabel = document.getElementById('party-code');
     const status = document.getElementById('party-status');
+    const sidebar = document.getElementById('host-leaderboard-list');
+    const resultStatus = document.getElementById('result-ready-status');
+    const codeChip = document.getElementById('party-chip');
+    const codeChipText = document.getElementById('party-chip-text');
+    const players = getPlayers();
     if (!partyPanel) return;
     partyPanel.innerHTML = '';
-    getPlayers().forEach(p => {
+    players.forEach(p => {
         const div = document.createElement('div');
         div.className = `pill ${p.ready ? 'ready' : ''}`;
         div.innerHTML = `<span class="dot" style="background:${p.color}"></span>${p.name}`;
@@ -265,8 +270,44 @@ export function syncLobbyUI() {
         partyCodeLabel.innerText = `Party code: ${partyCode}`;
     }
     if (status) {
-        const readyCount = getPlayers().filter(p => p.ready).length;
-        const total = getPlayers().length;
+        const readyCount = players.filter(p => p.ready).length;
+        const total = players.length;
         status.innerText = total === 0 ? 'Waiting for phones to join…' : `${readyCount}/${total} ready • need 2+ to start`;
+    }
+
+    if (codeChipText && partyCode) {
+        codeChipText.innerText = `Code: ${partyCode}`;
+        codeChip?.classList.add('visible');
+    }
+
+    if (sidebar) {
+        sidebar.innerHTML = '';
+        players.forEach(p => {
+            const row = document.createElement('div');
+            row.className = 'host-row';
+            row.dataset.slot = p.slot;
+            row.innerHTML = `
+                <div class="host-row-header">
+                    <span class="badge" style="background:${p.color}"></span>
+                    <span class="name">${p.name}</span>
+                    <span class="ready-chip ${p.ready ? 'ready' : 'waiting'}">${p.ready ? 'Ready' : 'Not ready'}</span>
+                </div>
+                <div class="host-row-meta">
+                    <span class="score">Score: ${p.score || 0}</span>
+                    <span class="current-stat" data-slot="${p.slot}">Tap ready</span>
+                </div>
+            `;
+            sidebar.appendChild(row);
+        });
+    }
+
+    if (resultStatus) {
+        const readyCount = players.filter(p => p.ready).length;
+        const total = players.length;
+        resultStatus.innerText = total === 0 ? 'Waiting for players to rejoin…' : `${readyCount}/${total} ready for the next round`;
+    }
+
+    if (window.GameManager?.updateHud) {
+        window.GameManager.updateHud();
     }
 }

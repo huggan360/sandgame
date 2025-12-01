@@ -4,7 +4,7 @@ import {
     gameObjects, resetPlayers, clearGameObjects, removeObj, flashHit,
     setEnvironment, updateCamera
 } from './scene.js';
-import { allReady, broadcastGameEnd, broadcastStart, getPartyCode, onReadyStateChange, syncLobbyUI } from './party.js';
+import { allReady, broadcastGameEnd, broadcastStart, getPartyCode, getPlayers, onReadyStateChange, syncLobbyUI } from './party.js';
 import { BrawlGame } from './minigames/brawl.js';
 import { SurvivalGame } from './minigames/survival.js';
 import { CollectGame } from './minigames/collect.js';
@@ -27,8 +27,10 @@ const ui = {
     countdown: document.getElementById('countdown'),
     winnerText: document.getElementById('winner-text'),
     loserTask: document.getElementById('loser-task'),
-    p1Hud: document.querySelector('.p1-hud'),
-    p2Hud: document.querySelector('.p2-hud')
+    leaderboard: document.getElementById('host-leaderboard-list'),
+    codeChip: document.getElementById('party-chip'),
+    codeChipText: document.getElementById('party-chip-text'),
+    resultStatus: document.getElementById('result-ready-status')
 };
 
 const minigameOrder = ['BRAWL', 'SURVIVAL', 'COLLECT', 'VOLCANO', 'SHELL', 'CRAB', 'GEYSER', 'SKY'];
@@ -153,6 +155,7 @@ const GameManager = {
         }
         ui.winnerText.innerText = text;
         ui.loserTask.innerText = penalty;
+        if (ui.resultStatus) ui.resultStatus.innerText = 'Waiting for everyone to ready up…';
         ui.result.classList.add('active');
         const winnerSlot = winner === 1 ? 0 : winner === 2 ? 1 : null;
         broadcastGameEnd(winnerSlot);
@@ -167,6 +170,26 @@ const GameManager = {
         if(this.currentGame === 'GEYSER') return `Player ${loser} drinks 3 sips`;
         if(this.currentGame === 'SKY') return `Player ${loser} finishes their drink`;
         return 'Drink up!';
+    },
+
+    prepareNextRound() {
+        ui.result.classList.remove('active');
+        ui.lobby.classList.add('active');
+        setEnvironment('ISLAND');
+        clearGameObjects();
+        resetPlayers();
+        this.state = 'LOBBY';
+        this.boundaryLimit = 8;
+        this.updateHud();
+        this.spinWheel();
+    },
+
+    handleAllReady() {
+        if (this.state === 'LOBBY' && allReady()) {
+            this.spinWheel();
+        } else if (this.state === 'RESULT' && allReady()) {
+            this.prepareNextRound();
+        }
     },
 
     async returnToLobby() {
@@ -184,16 +207,31 @@ const GameManager = {
     },
 
     updateHud() {
-        if(this.currentGame === 'COLLECT' || this.currentGame === 'SHELL') {
-            ui.p1Hud.innerText = `P1 Score: ${this.p1Score}`;
-            ui.p2Hud.innerText = `P2 Score: ${this.p2Score}`;
-        } else if(this.currentGame === 'BRAWL' || this.currentGame === 'VOLCANO' || this.currentGame === 'GEYSER') {
-            ui.p1Hud.innerText = `P1 HP: ${p1Mesh.hp || 0}`;
-            ui.p2Hud.innerText = `P2 HP: ${p2Mesh.hp || 0}`;
-        } else {
-            ui.p1Hud.innerText = 'P1 (Green)';
-            ui.p2Hud.innerText = 'P2 (Pink)';
-        }
+        const players = getPlayers();
+        const statForSlot = (slot) => {
+            const player = players.find(p => p.slot === slot);
+            if (!player) return 'Waiting for player';
+            if (this.state === 'LOBBY') return player.ready ? 'Ready' : 'Not ready';
+            if (this.state === 'RESULT') return 'Tap ready for next round';
+
+            const isP1 = slot === 0;
+            const isP2 = slot === 1;
+            if (!isP1 && !isP2) return 'Spectating';
+
+            if(this.currentGame === 'COLLECT' || this.currentGame === 'SHELL') {
+                const score = isP1 ? this.p1Score : this.p2Score;
+                return `Score: ${score}`;
+            } else if(this.currentGame === 'BRAWL' || this.currentGame === 'VOLCANO' || this.currentGame === 'GEYSER') {
+                const hp = isP1 ? (p1Mesh.hp || 0) : (p2Mesh.hp || 0);
+                return `HP: ${hp}`;
+            }
+            return 'On the field';
+        };
+
+        players.forEach(p => {
+            const statEl = document.querySelector(`.current-stat[data-slot="${p.slot}"]`);
+            if (statEl) statEl.innerText = statForSlot(p.slot);
+        });
     }
 };
 
@@ -382,17 +420,23 @@ function animate(time) {
 export function bootstrapGame() {
     window.GameManager = GameManager;
     const partyCodeLabel = document.getElementById('party-code');
+    const code = getPartyCode();
     if (partyCodeLabel) {
-        partyCodeLabel.innerText = `Party code: ${getPartyCode()}`;
+        partyCodeLabel.innerText = `Party code: ${code}`;
+    }
+    if (ui.codeChipText) {
+        ui.codeChipText.innerText = `Code: ${code}`;
+        ui.codeChip?.classList.add('visible');
     }
     syncLobbyUI();
     onReadyStateChange((isReady) => {
-        if (isReady && GameManager.state === 'LOBBY') {
-            GameManager.spinWheel();
+        GameManager.updateHud();
+        if (isReady) {
+            GameManager.handleAllReady();
         }
     });
-    if (allReady() && GameManager.state === 'LOBBY') {
-        GameManager.spinWheel();
+    if (allReady()) {
+        GameManager.handleAllReady();
     }
     setEnvironment('ISLAND');
     resetPlayers();
