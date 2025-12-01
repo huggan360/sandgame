@@ -317,15 +317,41 @@
         #controller-fpv {
             position: absolute;
             inset: 0;
-            background: radial-gradient(circle at 50% 40%, rgba(82, 158, 255, 0.25), rgba(10, 22, 48, 0.75));
+            background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--fpv-color, #52a0ff) 35%, rgba(82, 158, 255, 0.25)), rgba(10, 22, 48, 0.8));
             backdrop-filter: blur(2px);
-            opacity: 0.4;
+            opacity: 0.35;
             transition: opacity 0.25s ease;
             pointer-events: none;
             z-index: 0;
+            --fpv-color: #52a0ff;
         }
 
         #controller-fpv.active { opacity: 0.8; }
+
+        #fpv-player-label {
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 14px;
+            background: rgba(0,0,0,0.45);
+            border: 1px solid rgba(255,255,255,0.14);
+            box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+        }
+
+        #fpv-badge {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--fpv-color, #52a0ff);
+            box-shadow: 0 0 16px color-mix(in srgb, var(--fpv-color, #52a0ff) 70%, rgba(49,255,176,0.6));
+        }
+
+        #fpv-player-name { font-weight: 800; letter-spacing: 0.04em; }
+        .fpv-player-sub { color: #d1e5ff; font-size: 0.85rem; opacity: 0.85; }
 
         #fpv-reticle {
             position: absolute;
@@ -369,6 +395,9 @@
 
         #fpv-reload.reloading { color: #ffd166; }
 
+        #controller-fpv:not(.crosshair-enabled) #fpv-reticle,
+        #controller-fpv:not(.crosshair-enabled) #fpv-reload { display: none; }
+
         .controller-card {
             background: rgba(255,255,255,0.06);
             border: 1px solid rgba(255,255,255,0.15);
@@ -378,6 +407,10 @@
             position: relative;
             z-index: 1;
         }
+
+        .layout-header { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+        #controller-layout-title { font-weight: 800; letter-spacing: 0.04em; }
+        #controller-layout-help { color: #cdd9e5; font-size: 0.95rem; line-height: 1.3; }
 
         #controller-join form {
             display: flex;
@@ -416,6 +449,8 @@
             align-items: center;
             justify-content: space-between;
         }
+
+        #controller-pad.movement-only { justify-content: center; }
 
         #controller-screen.started #controller-pad { display: flex; }
 
@@ -506,6 +541,13 @@
 
         <div id="controller-screen">
         <div id="controller-fpv">
+            <div id="fpv-player-label">
+                <span id="fpv-badge"></span>
+                <div>
+                    <div id="fpv-player-name">Your view</div>
+                    <div class="fpv-player-sub">First-person perspective</div>
+                </div>
+            </div>
             <div id="fpv-reticle">
                 <span class="reticle-line horizontal"></span>
                 <span class="reticle-line vertical"></span>
@@ -539,6 +581,10 @@
         </div>
 
         <div class="controller-card" id="controller-controls" style="display:none;">
+            <div class="layout-header">
+                <div id="controller-layout-title">Standard Controls</div>
+                <div id="controller-layout-help">Use the joystick to move. Action buttons change per game.</div>
+            </div>
             <button id="ready-toggle" class="waiting" disabled>Tap Ready</button>
             <div id="controller-pad">
                 <div id="joystick">

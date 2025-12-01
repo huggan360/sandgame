@@ -68,7 +68,6 @@ const GameManager = {
 
     spinWheel() {
         this.state = 'STARTING';
-        broadcastStart();
         ui.lobby.classList.remove('active');
         ui.wheel.classList.add('active');
         const slice = 360 / minigameOrder.length;
@@ -145,6 +144,7 @@ const GameManager = {
         ui.timer.style.display = 'block';
         this.state = 'PLAYING';
         this.timer = 0;
+        broadcastStart(this.currentGame);
         this.currentMinigame.start(this.getActiveMeshes(), this);
         this.updateHud();
     },

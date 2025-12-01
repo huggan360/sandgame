@@ -1,4 +1,4 @@
-import { becomeController, connectControllerToParty, initParty, mountControllerUI, onControllerStart, sendJoinRequest, setControllerReady, sendControllerInput, startHosting } from './party.js';
+import { becomeController, connectControllerToParty, getControllerSlot, initParty, mountControllerUI, onControllerStart, sendJoinRequest, setControllerReady, sendControllerInput, startHosting } from './party.js';
 
 async function init() {
     const role = initParty();
@@ -33,6 +33,22 @@ function setupControllerButtons(prefillCode) {
     const fpv = document.getElementById('controller-fpv');
     const fpvReticle = document.getElementById('fpv-reticle');
     const fpvReload = document.getElementById('fpv-reload');
+    const fpvBadge = document.getElementById('fpv-badge');
+    const fpvPlayerName = document.getElementById('fpv-player-name');
+    const layoutTitle = document.getElementById('controller-layout-title');
+    const layoutHelp = document.getElementById('controller-layout-help');
+    const controllerLayouts = {
+        DEFAULT: { title: 'Standard Controls', help: 'Use the joystick to move. Action appears when a game needs it.', actionLabel: 'Action', showAction: true, crosshair: false },
+        BRAWL: { title: 'Brawl', help: 'Move to line up a punch. Tap to swing when in range.', actionLabel: 'Punch', showAction: true, crosshair: false },
+        SURVIVAL: { title: 'Survival', help: 'No attacks here — weave to dodge falling coconuts.', actionLabel: 'Action', showAction: false, crosshair: false },
+        COLLECT: { title: 'Pineapple Rush', help: 'Sprint between pineapples and drop-offs. Tap to grab or drop.', actionLabel: 'Grab/Drop', showAction: true, crosshair: false },
+        VOLCANO: { title: 'Magma Madness', help: 'Keep moving to avoid eruptions. No action button needed.', actionLabel: 'Action', showAction: false, crosshair: false },
+        SHELL: { title: 'Shell Sprint', help: 'Aim for shells. Boost when the time is right.', actionLabel: 'Boost', showAction: true, crosshair: false },
+        CRAB: { title: 'Crab Dodge', help: 'Slide around the crabs — movement only.', actionLabel: 'Action', showAction: false, crosshair: false },
+        TANK: { title: 'Tank Takedown', help: 'Aim your turret with the stick. Fire when the reticle is on target.', actionLabel: 'Fire Cannon', showAction: true, crosshair: true },
+        SKY: { title: 'Sky Rink', help: 'Skate fast and body check foes off the edge.', actionLabel: 'Body Check', showAction: true, crosshair: false },
+        SHOOTING: { title: 'Shooter', help: 'Aim carefully and fire from your own perspective.', actionLabel: 'Shoot', showAction: true, crosshair: true }
+    };
     if (codeInput && prefillCode) codeInput.value = prefillCode.toUpperCase();
 
     const readyBtn = document.getElementById('ready-toggle');
@@ -44,6 +60,17 @@ function setupControllerButtons(prefillCode) {
         readyBtn.classList.remove('ready');
         readyBtn.innerText = 'Tap Ready';
         readyBtn.disabled = false;
+    };
+
+    const refreshFpvIdentity = () => {
+        const slot = getControllerSlot();
+        const color = slot?.color || '#31ffb0';
+        if (fpv) fpv.style.setProperty('--fpv-color', color);
+        if (fpvBadge) fpvBadge.style.background = color;
+        if (fpvPlayerName) {
+            const label = slot?.name || 'Your character';
+            fpvPlayerName.textContent = `${label}'s view`;
+        }
     };
 
     const renderLeaderboard = (entries, selfId) => {
@@ -98,6 +125,7 @@ function setupControllerButtons(prefillCode) {
             connected = true;
             if (readyBtn) readyBtn.disabled = false;
             statusLine.textContent = `Joined as ${name}. Tap ready while waiting for host.`;
+            refreshFpvIdentity();
             if (joinCard) joinCard.style.display = 'none';
             if (controls) {
                 controls.style.display = 'block';
@@ -140,6 +168,32 @@ function setupControllerButtons(prefillCode) {
         }
     };
 
+    let currentLayout = 'DEFAULT';
+    const applyControllerLayout = (gameType = 'DEFAULT') => {
+        currentLayout = gameType || 'DEFAULT';
+        const config = controllerLayouts[currentLayout] || controllerLayouts.DEFAULT;
+        if (layoutTitle) layoutTitle.textContent = config.title;
+        if (layoutHelp) layoutHelp.textContent = config.help;
+
+        const showAction = config.showAction !== false;
+        if (fireBtn) {
+            fireBtn.style.display = showAction ? 'inline-block' : 'none';
+            fireBtn.textContent = config.actionLabel || 'Action';
+        }
+
+        if (!showAction && state.action) {
+            state.action = false;
+            sendState();
+        }
+
+        if (pad) pad.classList.toggle('movement-only', !showAction);
+
+        const crosshairEnabled = !!config.crosshair;
+        if (fpvReticle) fpvReticle.style.display = crosshairEnabled ? 'block' : 'none';
+        if (fpvReload) fpvReload.style.display = crosshairEnabled ? 'block' : 'none';
+        if (fpv) fpv.classList.toggle('crosshair-enabled', crosshairEnabled);
+    };
+
     const startReload = (seconds = 2) => {
         reloadTimer = seconds;
         updateReloadUI();
@@ -156,6 +210,7 @@ function setupControllerButtons(prefillCode) {
 
     updateReloadUI();
     updateReticle();
+    applyControllerLayout();
 
     const resetThumb = () => {
         if (!thumb) return;
@@ -226,7 +281,8 @@ function setupControllerButtons(prefillCode) {
         fireBtn?.addEventListener(evt, () => setAction(false));
     });
 
-    onControllerStart(() => {
+    onControllerStart((details) => {
+        const gameType = details?.game || 'DEFAULT';
         const screen = document.getElementById('controller-screen');
         if (screen) screen.classList.add('started');
         if (pad) pad.style.display = 'flex';
@@ -236,6 +292,8 @@ function setupControllerButtons(prefillCode) {
         const status = document.getElementById('controller-status');
         if (joinCard) joinCard.style.display = 'none';
         if (status) status.style.display = 'none';
+        applyControllerLayout(gameType);
+        refreshFpvIdentity();
         fpv?.classList.add('active');
         updateReloadUI();
     });
@@ -251,6 +309,13 @@ function setupControllerButtons(prefillCode) {
         if (statusLine) statusLine.textContent = 'Game finished! Tap ready for the next round.';
         setControllerReady(false);
         renderLeaderboard(leaderboard, selfId);
+        applyControllerLayout('DEFAULT');
+        if (fpv) {
+            fpv.classList.remove('crosshair-enabled');
+            fpv.classList.remove('active');
+        }
+        if (fpvReticle) fpvReticle.style.display = 'none';
+        if (fpvReload) fpvReload.style.display = 'none';
     });
 }
 
