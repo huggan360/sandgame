@@ -60,7 +60,7 @@ function assignSlot(id, name) {
     const colors = ['#00ffaa', '#ff00ff', '#ffd166', '#60a5fa'];
     const slotIndex = playerSlots.length;
     if (slotIndex >= 4) return null;
-    const slot = { id, name: name || `Player ${slotIndex + 1}`, ready: false, color: colors[slotIndex], slot: slotIndex };
+    const slot = { id, name: name || `Player ${slotIndex + 1}`, ready: false, color: colors[slotIndex], slot: slotIndex, score: 0 };
     playerSlots.push(slot);
     notify();
     return slot;
@@ -104,6 +104,9 @@ function attachControllerConn(conn, reject) {
             updateControllerHeader();
             slotResolvers.splice(0).forEach(r => r());
         }
+        if (data.type === 'game-end') {
+            notifyControllerOfGameEnd(data.leaderboard);
+        }
         if (data.type === 'start') {
             controllerState.started = true;
             startListeners.forEach(cb => cb());
@@ -139,6 +142,27 @@ async function controllerPeer(code, name) {
 
 export function broadcastStart() {
     connections.forEach(c => c.open && c.send({ type: 'start' }));
+}
+
+function notifyControllerOfGameEnd(leaderboard) {
+    const event = new CustomEvent('controller-game-end', { detail: { leaderboard, selfId: controllerState.slot?.id || controllerState.conn?.peer } });
+    window.dispatchEvent(event);
+}
+
+export function broadcastGameEnd(winnerSlot) {
+    if (typeof winnerSlot === 'number' && playerSlots[winnerSlot]) {
+        playerSlots[winnerSlot].score = (playerSlots[winnerSlot].score || 0) + 1;
+    }
+    playerSlots.forEach(p => p.ready = false);
+    notify();
+    const leaderboard = playerSlots.map(p => ({
+        id: p.id,
+        name: p.name,
+        score: p.score || 0,
+        color: p.color,
+        slot: p.slot
+    }));
+    connections.forEach(c => c.open && c.send({ type: 'game-end', leaderboard }));
 }
 
 export function setControllerReady(ready) {
