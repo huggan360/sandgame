@@ -8,6 +8,8 @@ import { BrawlGame } from './minigames/brawl.js';
 import { SurvivalGame } from './minigames/survival.js';
 import { CollectGame } from './minigames/collect.js';
 import { VolcanoGame } from './minigames/volcano.js'; // Import new game
+import { ShellSprintGame } from './minigames/shell_sprint.js';
+import { CrabDodgeGame } from './minigames/crab_dodge.js';
 
 const ui = {
     lobby: document.getElementById('lobby-card'),
@@ -26,11 +28,15 @@ const ui = {
     p2Hud: document.querySelector('.p2-hud')
 };
 
+const minigameOrder = ['BRAWL', 'SURVIVAL', 'COLLECT', 'VOLCANO', 'SHELL', 'CRAB'];
+
 const minigames = {
     'BRAWL': new BrawlGame(),
     'SURVIVAL': new SurvivalGame(),
     'COLLECT': new CollectGame(),
-    'VOLCANO': new VolcanoGame()
+    'VOLCANO': new VolcanoGame(),
+    'SHELL': new ShellSprintGame(),
+    'CRAB': new CrabDodgeGame()
 };
 
 const GameManager = {
@@ -45,23 +51,33 @@ const GameManager = {
     spinWheel() {
         ui.lobby.classList.remove('active');
         ui.wheel.classList.add('active');
-        const extraSpins = 5;
-        const randomAngle = Math.floor(Math.random() * 360);
-        const totalDegree = (360 * extraSpins) + randomAngle;
-        this.currentRotation += totalDegree;
-        ui.wheelElement.style.transform = `rotate(-${this.currentRotation}deg)`;
-        setTimeout(() => {
-            this.resolveWheel(this.currentRotation % 360);
-        }, 3100);
+        const slice = 360 / minigameOrder.length;
+        const randomSlice = Math.floor(Math.random() * minigameOrder.length);
+        const randomOffset = Math.random() * slice;
+        const targetAngle = randomSlice * slice + randomOffset;
+        const extraSpins = 5 + Math.random() * 2;
+        const startRotation = this.currentRotation;
+        const finalRotation = startRotation + extraSpins * 360 + targetAngle;
+        const duration = 3800;
+        const start = performance.now();
+
+        const animateSpin = (now) => {
+            const t = Math.min((now - start) / duration, 1);
+            const easeOut = 1 - Math.pow(1 - t, 3);
+            const angle = startRotation + (finalRotation - startRotation) * easeOut;
+            this.currentRotation = angle;
+            ui.wheelElement.style.transform = `rotate(-${angle}deg)`;
+            if (t < 1) requestAnimationFrame(animateSpin);
+            else this.resolveWheel(angle % 360);
+        };
+
+        requestAnimationFrame(animateSpin);
     },
 
     resolveWheel(finalAngle) {
-        let type = '';
-        // 4 Games = 90 degrees each
-        if (finalAngle < 90) type = 'BRAWL';
-        else if (finalAngle < 180) type = 'SURVIVAL';
-        else if (finalAngle < 270) type = 'COLLECT';
-        else type = 'VOLCANO';
+        const slice = 360 / minigameOrder.length;
+        const index = Math.floor(finalAngle / slice) % minigameOrder.length;
+        const type = minigameOrder[index];
         
         ui.wheel.classList.remove('active');
         this.setupMinigame(type);
@@ -79,7 +95,7 @@ const GameManager = {
         
         // Handle Scene Switching
         if(type === 'VOLCANO') setEnvironment('VOLCANO');
-        else setEnvironment('ARENA');
+        else setEnvironment('ISLAND');
 
         resetPlayers();
         clearGameObjects();
@@ -107,7 +123,7 @@ const GameManager = {
         ui.timer.style.display = 'block';
         this.state = 'PLAYING';
         this.timer = 0;
-        this.currentMinigame.start(p1Mesh, p2Mesh);
+        this.currentMinigame.start(p1Mesh, p2Mesh, this);
         this.updateHud();
     },
 
@@ -135,7 +151,8 @@ const GameManager = {
         if(this.currentGame === 'BRAWL') return `Player ${loser} drinks 1 sip`;
         if(this.currentGame === 'SURVIVAL') return `Player ${loser} drinks 2 sips`;
         if(this.currentGame === 'VOLCANO') return `Player ${loser} takes a SHOT (or 3 sips)`;
-        if(this.currentGame === 'COLLECT') return `Player ${loser} drinks diff score`;
+        if(this.currentGame === 'COLLECT' || this.currentGame === 'SHELL') return `Player ${loser} drinks diff score`;
+        if(this.currentGame === 'CRAB') return `Player ${loser} drinks 1 sip`;
         return 'Drink up!';
     },
 
@@ -150,7 +167,7 @@ const GameManager = {
     },
 
     updateHud() {
-        if(this.currentGame === 'COLLECT') {
+        if(this.currentGame === 'COLLECT' || this.currentGame === 'SHELL') {
             ui.p1Hud.innerText = `P1 Score: ${this.p1Score}`;
             ui.p2Hud.innerText = `P2 Score: ${this.p2Score}`;
         } else if(this.currentGame === 'BRAWL' || this.currentGame === 'VOLCANO') {
@@ -166,6 +183,16 @@ const GameManager = {
 function clampPlayers(limit) {
     p1Mesh.position.clamp(new THREE.Vector3(-limit,0,-limit), new THREE.Vector3(limit,1,limit));
     p2Mesh.position.clamp(new THREE.Vector3(-limit,0,-limit), new THREE.Vector3(limit,1,limit));
+}
+
+function playerCollidesWithObstacle(player) {
+    for (const obj of gameObjects) {
+        if (obj.type === 'obstacle') {
+            const dist = Math.hypot(player.position.x - obj.mesh.position.x, player.position.z - obj.mesh.position.z);
+            if (dist < 1.4) return true;
+        }
+    }
+    return false;
 }
 
 function processObjects(dt) {
@@ -243,6 +270,21 @@ function processObjects(dt) {
                 GameManager.p2Score += obj.value; removeObj(i); checkCollectionWin();
             }
         }
+        // --- CRABS (CRAB DODGE) ---
+        else if (obj.type === 'crab') {
+            obj.t += dt;
+            obj.mesh.position.add(obj.vel.clone().multiplyScalar(dt));
+            obj.mesh.position.z += Math.sin(obj.t * 4) * dt * 1.5;
+            obj.mesh.rotation.z += dt * 4 * Math.sign(obj.vel.x);
+            if (Math.abs(obj.mesh.position.x) > 14) { removeObj(i); continue; }
+
+            if (GameManager.currentGame === 'CRAB') {
+                const distP1 = obj.mesh.position.distanceTo(p1Mesh.position);
+                const distP2 = obj.mesh.position.distanceTo(p2Mesh.position);
+                if (distP1 < 1) { GameManager.endGame(2); removeObj(i); }
+                else if (distP2 < 1) { GameManager.endGame(1); removeObj(i); }
+            }
+        }
     }
 }
 
@@ -262,17 +304,31 @@ function animate(time) {
     const speed = 8 * dt;
 
     if (GameManager.state === 'LOBBY' || GameManager.state === 'PLAYING') {
+        if (p1In.x !== 0 || p1In.z !== 0) {
+            p1Mesh.aimDir = new THREE.Vector3(p1In.x, 0, p1In.z).normalize();
+        }
+        if (p2In.x !== 0 || p2In.z !== 0) {
+            p2Mesh.aimDir = new THREE.Vector3(p2In.x, 0, p2In.z).normalize();
+        }
         // Player 1 Movement (Blocked if stunned)
         if ((!p1Mesh.stunned || p1Mesh.stunned <= 0) && (p1In.x !== 0 || p1In.z !== 0)) {
+            const oldPos = p1Mesh.position.clone();
             p1Mesh.position.x += p1In.x * speed;
             p1Mesh.position.z += p1In.z * speed;
             p1Mesh.lookAt(p1Mesh.position.x + p1In.x, p1Mesh.position.y, p1Mesh.position.z + p1In.z);
+            if (GameManager.currentGame === 'BRAWL' && playerCollidesWithObstacle(p1Mesh)) {
+                p1Mesh.position.copy(oldPos);
+            }
         }
         // Player 2 Movement (Blocked if stunned)
         if ((!p2Mesh.stunned || p2Mesh.stunned <= 0) && (p2In.x !== 0 || p2In.z !== 0)) {
+            const oldPos = p2Mesh.position.clone();
             p2Mesh.position.x += p2In.x * speed;
             p2Mesh.position.z += p2In.z * speed;
             p2Mesh.lookAt(p2Mesh.position.x + p2In.x, p2Mesh.position.y, p2Mesh.position.z + p2In.z);
+            if (GameManager.currentGame === 'BRAWL' && playerCollidesWithObstacle(p2Mesh)) {
+                p2Mesh.position.copy(oldPos);
+            }
         }
         if (GameManager.state === 'PLAYING') clampPlayers(8);
     }
@@ -281,7 +337,7 @@ function animate(time) {
         GameManager.timer += dt;
         ui.timer.innerText = Math.max(0, Math.floor(30 - GameManager.timer)).toString();
         // Time limit ends game (Player with most HP wins in Volcano/Brawl)
-        if(GameManager.timer >= 30 && GameManager.currentGame !== 'COLLECT') {
+        if(GameManager.timer >= 30 && GameManager.currentGame !== 'COLLECT' && GameManager.currentGame !== 'SHELL') {
             if(GameManager.currentGame === 'BRAWL' || GameManager.currentGame === 'VOLCANO') {
                 if(p1Mesh.hp > p2Mesh.hp) GameManager.endGame(1);
                 else if(p2Mesh.hp > p1Mesh.hp) GameManager.endGame(2);
@@ -290,7 +346,7 @@ function animate(time) {
                 GameManager.endGame(0);
             }
         }
-        GameManager.currentMinigame.update(dt, { p1: p1In, p2: p2In }, p1Mesh, p2Mesh, GameManager.timer);
+        GameManager.currentMinigame.update(dt, { p1: p1In, p2: p2In }, p1Mesh, p2Mesh, GameManager.timer, GameManager);
         processObjects(dt);
     }
 
