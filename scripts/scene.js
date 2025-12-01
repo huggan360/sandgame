@@ -100,6 +100,33 @@ lava.rotation.x = -Math.PI/2;
 lava.position.y = -2;
 volcanoGroup.add(lava);
 
+// 4. Flappy Backdrop (2D lane)
+export const flappyGroup = new THREE.Group();
+flappyGroup.visible = false;
+scene.add(flappyGroup);
+const flappyBackdrop = new THREE.Mesh(new THREE.PlaneGeometry(40, 20), new THREE.MeshStandardMaterial({ color: 0x9ad6ff }));
+flappyBackdrop.position.set(0, 6, -8);
+flappyGroup.add(flappyBackdrop);
+const flappyFloor = new THREE.Mesh(new THREE.BoxGeometry(40, 1, 1), new THREE.MeshStandardMaterial({ color: 0x7cc576 }));
+flappyFloor.position.set(0, 0, -8);
+flappyGroup.add(flappyFloor);
+
+// 5. Runner Road
+export const runnerGroup = new THREE.Group();
+runnerGroup.visible = false;
+scene.add(runnerGroup);
+const road = new THREE.Mesh(new THREE.PlaneGeometry(16, 80), new THREE.MeshStandardMaterial({ color: 0x333333 }));
+road.rotation.x = -Math.PI / 2;
+road.position.set(0, -0.01, 18);
+road.receiveShadow = true;
+runnerGroup.add(road);
+for (let i = -2; i <= 2; i++) {
+    const stripe = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 80), new THREE.MeshStandardMaterial({ color: 0xf2f2f2 }));
+    stripe.rotation.x = -Math.PI / 2;
+    stripe.position.set(i * 2, 0.001, 18);
+    runnerGroup.add(stripe);
+}
+
 // Players
 function createPlayerMesh(mat) {
     const group = new THREE.Group();
@@ -132,6 +159,10 @@ export function useDefaultModels() {
         if (mesh.tankParts) {
             mesh.tankParts.forEach(p => mesh.remove(p));
             mesh.tankParts = [];
+        }
+        if (mesh.flappyParts) {
+            mesh.flappyParts.forEach(p => mesh.remove(p));
+            mesh.flappyParts = [];
         }
     });
 }
@@ -341,6 +372,8 @@ export function setEnvironment(type) {
     arena.position.y = 100;
     islandGroup.visible = false;
     volcanoGroup.visible = false;
+    flappyGroup.visible = false;
+    runnerGroup.visible = false;
     ocean.visible = type === 'ISLAND';
 
     // Reset Light & Fog
@@ -378,6 +411,28 @@ export function setEnvironment(type) {
         dirLight.color.setHex(0xcde3ff);
         ocean.visible = false;
     }
+    else if (type === 'FLAPPY') {
+        flappyGroup.visible = true;
+        arena.position.y = 100;
+        islandGroup.visible = false;
+        volcanoGroup.visible = false;
+        ocean.visible = false;
+        scene.background = new THREE.Color(0xa3d8ff);
+        scene.fog.color.setHex(0xa3d8ff);
+        ambientLight.intensity = 0.9;
+        dirLight.color.setHex(0xffffff);
+    }
+    else if (type === 'RUNNER') {
+        runnerGroup.visible = true;
+        arena.position.y = 100;
+        islandGroup.visible = false;
+        volcanoGroup.visible = false;
+        ocean.visible = false;
+        scene.background = new THREE.Color(0x14233d);
+        scene.fog.color.setHex(0x14233d);
+        ambientLight.intensity = 0.8;
+        dirLight.color.setHex(0xc0d6ff);
+    }
     else { // Standard Arena
         arena.position.y = 0.1;
         arena.material = mats.obsidian;
@@ -414,7 +469,15 @@ export function updateCamera(state) {
     }
 
     const currentGame = window.GameManager?.currentGame;
-    if (currentGame === 'TANK') {
+    if (currentGame === 'FLAPPY') {
+        camera.position.set(0, 10, 20);
+        camera.lookAt(0, 6, -8);
+        camera.rotation.z = 0;
+    } else if (currentGame === 'RUNNER') {
+        camera.position.set(0, 10, -15);
+        camera.lookAt(0, 4, 12);
+        camera.rotation.z = 0;
+    } else if (currentGame === 'TANK') {
         camera.position.set(0, 34, 0.001);
         camera.lookAt(0, 0, 0);
         camera.rotation.z = 0;

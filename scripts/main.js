@@ -8,7 +8,8 @@ import { allReady, broadcastGameEnd, broadcastStart, getPartyCode, getPlayers, o
 import { BrawlGame } from './minigames/brawl.js';
 import { CollectGame } from './minigames/collect.js';
 import { VolcanoGame } from './minigames/volcano.js'; // Import new game
-import { ShellSprintGame } from './minigames/shell_sprint.js';
+import { FlappyFlockGame } from './minigames/flappy_flock.js';
+import { RoadRunnerGame } from './minigames/road_runner.js';
 import { CrabDodgeGame } from './minigames/crab_dodge.js';
 import { TankBattleGame } from './minigames/tank_battle.js';
 import { SkySlamGame } from './minigames/sky_slam.js';
@@ -32,16 +33,17 @@ const ui = {
     resultStatus: document.getElementById('result-ready-status')
 };
 
-const minigameOrder = ['BRAWL', 'COLLECT', 'VOLCANO', 'SHELL', 'CRAB', 'TANK', 'SKY'];
+const minigameOrder = ['BRAWL', 'COLLECT', 'VOLCANO', 'CRAB', 'TANK', 'SKY', 'FLAPPY', 'RUNNER'];
 
 const minigames = {
     'BRAWL': new BrawlGame(),
     'COLLECT': new CollectGame(),
     'VOLCANO': new VolcanoGame(),
-    'SHELL': new ShellSprintGame(),
     'CRAB': new CrabDodgeGame(),
     'TANK': new TankBattleGame(),
-    'SKY': new SkySlamGame()
+    'SKY': new SkySlamGame(),
+    'FLAPPY': new FlappyFlockGame(),
+    'RUNNER': new RoadRunnerGame()
 };
 
 const GameManager = {
@@ -195,10 +197,12 @@ const GameManager = {
         const loserName = this.getPlayerName(loserSlot);
         if(this.currentGame === 'BRAWL') return `${loserName} drinks 1 sip`;
         if(this.currentGame === 'VOLCANO') return `${loserName} takes a SHOT (or 3 sips)`;
-        if(this.currentGame === 'COLLECT' || this.currentGame === 'SHELL') return `${loserName} drinks diff score`;
+        if(this.currentGame === 'COLLECT') return `${loserName} drinks diff score`;
         if(this.currentGame === 'CRAB') return `${loserName} drinks 1 sip`;
         if(this.currentGame === 'TANK') return `${loserName} drinks 3 sips`;
         if(this.currentGame === 'SKY') return `${loserName} finishes their drink`;
+        if(this.currentGame === 'FLAPPY') return `${loserName} drinks 2 sips`;
+        if(this.currentGame === 'RUNNER') return `${loserName} takes 2 sips`;
         return 'Drink up!';
     },
 
@@ -261,10 +265,10 @@ const GameManager = {
 
             if (!this.activeSlots.includes(slot)) return 'Spectating';
 
-            if(this.currentGame === 'COLLECT' || this.currentGame === 'SHELL') {
+            if(this.currentGame === 'COLLECT' || this.currentGame === 'FLAPPY') {
                 const score = this.scores[slot] || 0;
                 return `Score: ${score}`;
-            } else if(this.currentGame === 'BRAWL' || this.currentGame === 'VOLCANO' || this.currentGame === 'TANK' || this.currentGame === 'CRAB') {
+            } else if(this.currentGame === 'BRAWL' || this.currentGame === 'VOLCANO' || this.currentGame === 'TANK' || this.currentGame === 'CRAB' || this.currentGame === 'RUNNER') {
                 const hp = playerMeshes[slot]?.hp ?? 0;
                 return `HP: ${hp}`;
             }
@@ -451,13 +455,22 @@ function animate(time) {
         GameManager.timer += dt;
         ui.timer.innerText = Math.max(0, Math.floor(30 - GameManager.timer)).toString();
         // Time limit ends game (Player with most HP wins in Volcano/Brawl/Tank)
-        if(GameManager.timer >= 30 && GameManager.currentGame !== 'COLLECT' && GameManager.currentGame !== 'SHELL') {
-            if(GameManager.currentGame === 'BRAWL' || GameManager.currentGame === 'VOLCANO' || GameManager.currentGame === 'TANK' || GameManager.currentGame === 'CRAB') {
+        if(GameManager.timer >= 30 && GameManager.currentGame !== 'COLLECT') {
+            if(GameManager.currentGame === 'BRAWL' || GameManager.currentGame === 'VOLCANO' || GameManager.currentGame === 'TANK' || GameManager.currentGame === 'CRAB' || GameManager.currentGame === 'RUNNER') {
                 let bestSlot = null; let bestHp = -Infinity; let tie = false;
                 GameManager.activeSlots.forEach(slot => {
                     const hp = playerMeshes[slot]?.hp ?? 0;
                     if (hp > bestHp) { bestHp = hp; bestSlot = slot; tie = false; }
                     else if (hp === bestHp) { tie = true; }
+                });
+                if (!tie && bestSlot !== null) GameManager.endGame(bestSlot);
+                else GameManager.endGame(null);
+            } else if (GameManager.currentGame === 'FLAPPY') {
+                let bestSlot = null; let bestScore = -Infinity; let tie = false;
+                GameManager.activeSlots.forEach(slot => {
+                    const score = GameManager.scores[slot] || 0;
+                    if (score > bestScore) { bestScore = score; bestSlot = slot; tie = false; }
+                    else if (score === bestScore) { tie = true; }
                 });
                 if (!tie && bestSlot !== null) GameManager.endGame(bestSlot);
                 else GameManager.endGame(null);
