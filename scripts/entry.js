@@ -36,7 +36,7 @@ function setupControllerButtons(prefillCode) {
     let selectedColor = null;
     const controllerLayouts = {
         DEFAULT: { title: 'Standard Controls', help: 'Use the joystick to move. Action appears when a game needs it.', actionLabel: 'Action', showAction: false, crosshair: false },
-        BRAWL: { title: 'Brawl', help: 'Move to line up a punch. Keep moving to win.', actionLabel: 'Punch', showAction: false, crosshair: false },
+        BRAWL: { title: 'Brawl', help: 'Move to aim and tap to fire tiki shots.', actionLabel: 'Fire', showAction: true, crosshair: false },
         COLLECT: { title: 'Pineapple Rush', help: 'Sprint between pineapples and drop-offs.', actionLabel: 'Grab/Drop', showAction: false, crosshair: false },
         VOLCANO: { title: 'Magma Madness', help: 'Keep moving to avoid eruptions. No action button needed.', actionLabel: 'Action', showAction: false, crosshair: false },
         SHELL: { title: 'Shell Sprint', help: 'Aim for shells. Boost when the time is right.', actionLabel: 'Boost', showAction: false, crosshair: false },
