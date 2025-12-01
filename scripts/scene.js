@@ -32,7 +32,9 @@ export const mats = {
     crate: new THREE.MeshStandardMaterial({ color: 0x8B4513 }),
     magma: new THREE.MeshStandardMaterial({ color: 0xff4500, emissive: 0xaa0000, roughness: 1 }),
     obsidian: new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 }),
-    shadow: new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3 })
+    shadow: new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3 }),
+    teal: new THREE.MeshStandardMaterial({ color: 0x00bcd4, metalness: 0.1, roughness: 0.4 }),
+    orange: new THREE.MeshStandardMaterial({ color: 0xffa040, metalness: 0.1, roughness: 0.4 })
 };
 
 // --- ENVIRONMENTS --- //
@@ -112,6 +114,8 @@ export function resetPlayers() {
     p2Mesh.position.set(3, 0, 0);
     p1Mesh.rotation.set(0, Math.PI/2, 0);
     p2Mesh.rotation.set(0, -Math.PI/2, 0);
+    p1Mesh.aimDir = new THREE.Vector3(1, 0, 0);
+    p2Mesh.aimDir = new THREE.Vector3(-1, 0, 0);
     p1Mesh.visible = true;
     p2Mesh.visible = true;
     p1Mesh.stunned = 0;
@@ -121,6 +125,8 @@ export function resetPlayers() {
 export function clearGameObjects() {
     gameObjects.forEach(o => {
         scene.remove(o.mesh);
+        if(o.topper) scene.remove(o.topper);
+        if(o.ring) scene.remove(o.ring);
         if(o.shadow) scene.remove(o.shadow);
     });
     gameObjects = [];
@@ -129,6 +135,8 @@ export function clearGameObjects() {
 export function removeObj(index) {
     const obj = gameObjects[index];
     scene.remove(obj.mesh);
+    if(obj.topper) scene.remove(obj.topper);
+    if(obj.ring) scene.remove(obj.ring);
     if(obj.shadow) scene.remove(obj.shadow);
     gameObjects.splice(index, 1);
 }
@@ -149,7 +157,7 @@ export function spawnProjectile(player, ownerId) {
     const mesh = new THREE.Mesh(geom, mat);
     mesh.position.copy(player.position);
     mesh.position.y = 0.8;
-    const forward = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0,1,0), player.rotation.y);
+    const forward = player.aimDir ? player.aimDir.clone() : new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0,1,0), player.rotation.y);
     scene.add(mesh);
     gameObjects.push({ type: 'projectile', mesh: mesh, vel: forward.multiplyScalar(20), owner: ownerId });
 }
@@ -180,6 +188,47 @@ export function spawnPineapple() {
     mesh.position.set(x, 0.5, z);
     scene.add(mesh);
     gameObjects.push({ type: 'pineapple', mesh: mesh, value: isGolden ? 3 : 1 });
+}
+
+export function spawnShellTarget() {
+    const x = (Math.random() - 0.5) * 14;
+    const z = (Math.random() - 0.5) * 14;
+    const mesh = new THREE.Mesh(new THREE.TorusGeometry(1, 0.15, 8, 24), mats.teal);
+    mesh.position.set(x, 0.5, z);
+    mesh.rotation.x = Math.PI / 2;
+    scene.add(mesh);
+
+    const topper = new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.8, 12), mats.gold);
+    topper.position.set(x, 0.9, z);
+    scene.add(topper);
+
+    const ring = new THREE.Mesh(new THREE.CircleGeometry(1.3, 24), mats.shadow.clone());
+    ring.material.opacity = 0.2;
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(x, 0.01, z);
+    scene.add(ring);
+
+    const target = { type: 'shell_target', mesh: mesh, topper: topper, ring: ring };
+    gameObjects.push(target);
+    return target;
+}
+
+export function spawnCrab() {
+    const dir = Math.random() > 0.5 ? 1 : -1;
+    const speed = 6 + Math.random() * 4;
+    const z = (Math.random() - 0.5) * 12;
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.6, 12, 12), mats.orange);
+    mesh.position.set(dir > 0 ? -12 : 12, 0.6, z);
+    mesh.castShadow = true;
+    scene.add(mesh);
+
+    const eyes = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.4, 6), mats.gold);
+    eyes.position.set(0, 0.6, 0.4);
+    mesh.add(eyes);
+
+    const crab = { type: 'crab', mesh: mesh, vel: new THREE.Vector3(speed * dir, 0, 0), t: 0 };
+    gameObjects.push(crab);
+    return crab;
 }
 
 export function spawnVolcanoRock() {

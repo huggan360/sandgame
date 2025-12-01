@@ -10,6 +10,8 @@ Open `index.html` in a modern browser to host a quick two-player drinking game n
 - **Tiki Brawl:** Shoot between crates; 3 hits to win.
 - **Coconut Chaos:** Avoid falling coconuts that speed up over time.
 - **Pineapple Rush:** Race to 5 points; golden pineapples grant 3 points.
+- **Shell Sprint:** First to tag three glowing shells scattered around the island wins.
+- **Crab Dodge:** Avoid the sideways stampede of crabs—one pinch knocks you out.
 
 The wheel decides the mode, a quick intro counts down, and the loser follows the sip rule shown after each round.
 

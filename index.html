@@ -98,14 +98,16 @@
         
         #wheel {
             width: 300px; height: 300px; border-radius: 50%; border: 8px solid white;
-            /* 4 Slice Conic Gradient */
+            /* 6 Slice Conic Gradient */
             background: conic-gradient(
-                #FF512F 0deg 90deg,   /* Brawl */
-                #228B22 90deg 180deg, /* Survival */
-                #FFD700 180deg 270deg, /* Collect */
-                #800080 270deg 360deg  /* Volcano (Purple/Dark) */
+                #FF512F 0deg 60deg,   /* Brawl */
+                #228B22 60deg 120deg, /* Survival */
+                #FFD700 120deg 180deg, /* Collect */
+                #800080 180deg 240deg,  /* Volcano (Purple/Dark) */
+                #00BCD4 240deg 300deg,  /* Shell Sprint */
+                #FFA040 300deg 360deg  /* Crab Dodge */
             );
-            transition: transform 3s cubic-bezier(0.1, 0.7, 0.1, 1);
+            transition: none;
             box-shadow: 0 0 30px rgba(0,0,0,0.5);
         }
         
@@ -148,6 +150,8 @@
                 <div class="legend-item"><span style="background: #228B22;"></span>SURVIVAL</div>
                 <div class="legend-item"><span style="background: #FFD700;"></span>COLLECT</div>
                 <div class="legend-item"><span style="background: #800080;"></span>VOLCANO</div>
+                <div class="legend-item"><span style="background: #00BCD4;"></span>SHELL SPRINT</div>
+                <div class="legend-item"><span style="background: #FFA040;"></span>CRAB DODGE</div>
             </div>
         </div>
 
