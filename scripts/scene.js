@@ -40,6 +40,9 @@ export const mats = {
     ice: new THREE.MeshStandardMaterial({ color: 0xa9e6ff, metalness: 0.6, roughness: 0.05, transparent: true, opacity: 0.85 })
 };
 
+const defaultColors = ['#00ffaa', '#ff00ff', '#ffd166', '#60a5fa'];
+let playerColors = [...defaultColors];
+
 // --- ENVIRONMENTS --- //
 
 // 1. Beach Environment
@@ -103,6 +106,7 @@ function createPlayerMesh(mat) {
     body.add(e1);
     body.add(e2);
     group.add(body);
+    group.body = body;
     return group;
 }
 
@@ -112,6 +116,43 @@ export const p3Mesh = createPlayerMesh(mats.p3);
 export const p4Mesh = createPlayerMesh(mats.p4);
 export const playerMeshes = [p1Mesh, p2Mesh, p3Mesh, p4Mesh];
 scene.add(p1Mesh, p2Mesh, p3Mesh, p4Mesh);
+
+export function useDefaultModels() {
+    playerMeshes.forEach(mesh => {
+        if (mesh.body) mesh.body.visible = true;
+        if (mesh.tankParts) {
+            mesh.tankParts.forEach(p => mesh.remove(p));
+            mesh.tankParts = [];
+        }
+    });
+}
+
+export function useTankModels() {
+    useDefaultModels();
+    playerMeshes.forEach((mesh, idx) => {
+        const color = playerColors[idx] || defaultColors[idx];
+        const base = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.4, 1.6), new THREE.MeshStandardMaterial({ color }));
+        base.position.y = 0.4;
+        const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.25, 12), new THREE.MeshStandardMaterial({ color }));
+        cap.position.y = 0.35;
+        const turret = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.9, 10), new THREE.MeshStandardMaterial({ color: 0x333333 }));
+        turret.rotation.z = Math.PI / 2;
+        turret.position.set(0, 0.3, 0.55);
+        base.add(cap);
+        base.add(turret);
+        mesh.add(base);
+        mesh.tankParts = [base];
+        if (mesh.body) mesh.body.visible = false;
+    });
+}
+
+export function setPlayerColors(colors = []) {
+    playerColors = defaultColors.map((c, idx) => colors[idx] || c);
+    playerMeshes.forEach((mesh, idx) => {
+        const body = mesh.body || mesh.children[0];
+        if (body?.material?.color) body.material.color.set(playerColors[idx] || defaultColors[idx]);
+    });
+}
 
 export let gameObjects = [];
 
@@ -261,10 +302,11 @@ export function spawnVolcanoRock() {
 }
 
 export function flashHit(mesh) {
-    mesh.children[0].material.color.setHex(0xffffff);
+    const body = mesh.body || mesh.children[0];
+    const original = playerColors[mesh.playerIndex] || defaultColors[mesh.playerIndex];
+    body.material.color.setHex(0xffffff);
     setTimeout(() => {
-        if(mesh === p1Mesh) mesh.children[0].material.color.setHex(0x00ffaa);
-        else mesh.children[0].material.color.setHex(0xff00ff);
+        body.material.color.set(original || 0x00ffaa);
     }, 100);
 }
 
