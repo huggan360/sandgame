@@ -34,7 +34,8 @@ export const mats = {
     obsidian: new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 }),
     shadow: new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3 }),
     teal: new THREE.MeshStandardMaterial({ color: 0x00bcd4, metalness: 0.1, roughness: 0.4 }),
-    orange: new THREE.MeshStandardMaterial({ color: 0xffa040, metalness: 0.1, roughness: 0.4 })
+    orange: new THREE.MeshStandardMaterial({ color: 0xffa040, metalness: 0.1, roughness: 0.4 }),
+    ice: new THREE.MeshStandardMaterial({ color: 0xa9e6ff, metalness: 0.6, roughness: 0.05, transparent: true, opacity: 0.85 })
 };
 
 // --- ENVIRONMENTS --- //
@@ -120,6 +121,10 @@ export function resetPlayers() {
     p2Mesh.visible = true;
     p1Mesh.stunned = 0;
     p2Mesh.stunned = 0;
+    p1Mesh.slideVel = new THREE.Vector3();
+    p2Mesh.slideVel = new THREE.Vector3();
+    p1Mesh.falling = false;
+    p2Mesh.falling = false;
 }
 
 export function clearGameObjects() {
@@ -128,6 +133,7 @@ export function clearGameObjects() {
         if(o.topper) scene.remove(o.topper);
         if(o.ring) scene.remove(o.ring);
         if(o.shadow) scene.remove(o.shadow);
+        if(o.parts) o.parts.forEach(p => scene.remove(p));
     });
     gameObjects = [];
 }
@@ -138,6 +144,7 @@ export function removeObj(index) {
     if(obj.topper) scene.remove(obj.topper);
     if(obj.ring) scene.remove(obj.ring);
     if(obj.shadow) scene.remove(obj.shadow);
+    if(obj.parts) obj.parts.forEach(p => scene.remove(p));
     gameObjects.splice(index, 1);
 }
 
@@ -281,10 +288,20 @@ export function setEnvironment(type) {
         scene.fog.color.setHex(0x220000);
         dirLight.color.setHex(0xff4400);
         ambientLight.color.setHex(0x550000);
-    } 
+    }
+    else if (type === 'SKY') {
+        arena.position.y = 4;
+        arena.material = mats.ice;
+        arena.scale.set(1, 1, 1);
+        scene.background = new THREE.Color(0xcce8ff);
+        scene.fog.color.setHex(0xb7d9ff);
+        ambientLight.intensity = 0.9;
+        dirLight.color.setHex(0xffffff);
+    }
     else { // Standard Arena
         arena.position.y = 0.1;
-        islandGroup.visible = false; // Keep surrounding ocean? Or hide? 
+        arena.material = mats.obsidian;
+        islandGroup.visible = false; // Keep surrounding ocean? Or hide?
         // Dark blue space for Arena
         scene.background = new THREE.Color(0x203040);
         ambientLight.intensity = 0.8;
