@@ -12,6 +12,7 @@ let startListeners = [];
 let readinessListeners = [];
 let lastReadyState = false;
 let slotResolvers = [];
+const availableColors = ['#00ffaa', '#ff00ff', '#ffd166', '#60a5fa', '#ff7f50', '#8ce99a'];
 
 function randomCode() {
     return Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -56,11 +57,19 @@ export function getPartyInputs() {
     return ordered;
 }
 
-function assignSlot(id, name) {
-    const colors = ['#00ffaa', '#ff00ff', '#ffd166', '#60a5fa'];
+function pickColor(requested) {
+    const used = new Set(playerSlots.map(p => p.color));
+    const palette = availableColors.filter(c => !used.has(c));
+    if (requested && palette.includes(requested)) return requested;
+    return palette[0] || null;
+}
+
+function assignSlot(id, name, preferredColor) {
     const slotIndex = playerSlots.length;
     if (slotIndex >= 4) return null;
-    const slot = { id, name: name || `Player ${slotIndex + 1}`, ready: false, color: colors[slotIndex], slot: slotIndex, score: 0 };
+    const color = pickColor(preferredColor);
+    if (!color) return null;
+    const slot = { id, name: name || `Player ${slotIndex + 1}`, ready: false, color, slot: slotIndex, score: 0 };
     playerSlots.push(slot);
     notify();
     return slot;
@@ -68,7 +77,7 @@ function assignSlot(id, name) {
 
 function handleControllerMessage(conn, msg) {
     if (msg.type === 'join') {
-        const slot = assignSlot(conn.peer, msg.name);
+        const slot = assignSlot(conn.peer, msg.name, msg.color);
         conn.send({ type: 'slot', slot });
     } else if (msg.type === 'input') {
         inputState[msg.id] = msg.state;
@@ -102,7 +111,7 @@ function attachControllerConn(conn, reject) {
         if (data.type === 'slot' && data.slot) {
             controllerState.slot = data.slot;
             updateControllerHeader();
-            slotResolvers.splice(0).forEach(r => r());
+            slotResolvers.splice(0).forEach(r => r(data.slot));
         }
         if (data.type === 'game-end') {
             notifyControllerOfGameEnd(data.leaderboard);
@@ -216,16 +225,16 @@ export function connectControllerToParty(code) {
     return controllerConnect(code);
 }
 
-export function sendJoinRequest(name) {
+export function sendJoinRequest(name, color) {
     if (role !== 'controller' || !controllerState.conn?.open) {
         return Promise.reject(new Error('Not connected'));
     }
-    controllerState.conn.send({ type: 'join', name });
+    controllerState.conn.send({ type: 'join', name, color });
     return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error('Timed out joining lobby')), 4000);
-        slotResolvers.push(() => {
+        slotResolvers.push((slot) => {
             clearTimeout(timeout);
-            resolve(controllerState.slot);
+            resolve(slot || controllerState.slot);
         });
     });
 }

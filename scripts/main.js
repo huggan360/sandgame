@@ -2,11 +2,10 @@ import { Input } from './input.js';
 import {
     scene, camera, renderer, mats, playerMeshes,
     gameObjects, resetPlayers, clearGameObjects, removeObj, flashHit,
-    setEnvironment, updateCamera
+    setEnvironment, updateCamera, setPlayerColors, useDefaultModels
 } from './scene.js';
 import { allReady, broadcastGameEnd, broadcastStart, getPartyCode, getPlayers, onReadyStateChange, syncLobbyUI } from './party.js';
 import { BrawlGame } from './minigames/brawl.js';
-import { SurvivalGame } from './minigames/survival.js';
 import { CollectGame } from './minigames/collect.js';
 import { VolcanoGame } from './minigames/volcano.js'; // Import new game
 import { ShellSprintGame } from './minigames/shell_sprint.js';
@@ -33,11 +32,10 @@ const ui = {
     resultStatus: document.getElementById('result-ready-status')
 };
 
-const minigameOrder = ['BRAWL', 'SURVIVAL', 'COLLECT', 'VOLCANO', 'SHELL', 'CRAB', 'TANK', 'SKY'];
+const minigameOrder = ['BRAWL', 'COLLECT', 'VOLCANO', 'SHELL', 'CRAB', 'TANK', 'SKY'];
 
 const minigames = {
     'BRAWL': new BrawlGame(),
-    'SURVIVAL': new SurvivalGame(),
     'COLLECT': new CollectGame(),
     'VOLCANO': new VolcanoGame(),
     'SHELL': new ShellSprintGame(),
@@ -112,9 +110,14 @@ const GameManager = {
         ui.desc.innerText = info.description;
         ui.penalty.innerText = info.penalty;
 
-        this.playerCount = Math.max(2, Math.min(4, getPlayers().length || 2));
+        const players = getPlayers();
+        this.playerCount = Math.max(2, Math.min(4, players.length || 2));
         this.activeSlots = Array.from({ length: this.playerCount }, (_, i) => i);
         this.aliveSlots = [...this.activeSlots];
+
+        const playerColors = this.activeSlots.map(idx => players[idx]?.color);
+        setPlayerColors(playerColors);
+        useDefaultModels();
 
         // Handle Scene Switching
         const env = info.environment || (type === 'VOLCANO' ? 'VOLCANO' : 'ISLAND');
@@ -172,7 +175,6 @@ const GameManager = {
     getPenalty(loserSlot) {
         const loser = loserSlot + 1;
         if(this.currentGame === 'BRAWL') return `Player ${loser} drinks 1 sip`;
-        if(this.currentGame === 'SURVIVAL') return `Player ${loser} drinks 2 sips`;
         if(this.currentGame === 'VOLCANO') return `Player ${loser} takes a SHOT (or 3 sips)`;
         if(this.currentGame === 'COLLECT' || this.currentGame === 'SHELL') return `Player ${loser} drinks diff score`;
         if(this.currentGame === 'CRAB') return `Player ${loser} drinks 1 sip`;
