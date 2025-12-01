@@ -13,14 +13,13 @@ export class CrabDodgeGame {
         };
     }
 
-    start(p1Mesh, p2Mesh) {
+    start(players) {
         this.spawnTimer = 0.8;
-        p1Mesh.hp = 1;
-        p2Mesh.hp = 1;
+        players.forEach(p => p.hp = 1);
         spawnCrab();
     }
 
-    update(dt, _input, _p1Mesh, _p2Mesh, timer) {
+    update(dt, _input, _players, timer) {
         this.spawnTimer -= dt;
         if (this.spawnTimer <= 0) {
             spawnCrab();

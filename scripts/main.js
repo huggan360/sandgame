@@ -1,6 +1,6 @@
 import { Input } from './input.js';
 import {
-    scene, camera, renderer, mats, p1Mesh, p2Mesh,
+    scene, camera, renderer, mats, playerMeshes,
     gameObjects, resetPlayers, clearGameObjects, removeObj, flashHit,
     setEnvironment, updateCamera
 } from './scene.js';
@@ -50,11 +50,21 @@ const GameManager = {
     state: 'LOBBY',
     currentGame: null,
     currentMinigame: null,
-    p1Score: 0,
-    p2Score: 0,
+    scores: [0,0,0,0],
     timer: 0,
     currentRotation: 0,
     boundaryLimit: 8,
+    playerCount: 2,
+    activeSlots: [0,1],
+    aliveSlots: [0,1],
+
+    getActiveMeshes() {
+        return this.activeSlots.map(idx => playerMeshes[idx]);
+    },
+
+    getActiveInputs() {
+        return this.activeSlots.map(idx => Input.getAxisForSlot(idx));
+    },
 
     spinWheel() {
         this.state = 'STARTING';
@@ -103,16 +113,17 @@ const GameManager = {
         ui.desc.innerText = info.description;
         ui.penalty.innerText = info.penalty;
 
+        this.playerCount = Math.max(2, Math.min(4, getPlayers().length || 2));
+        this.activeSlots = Array.from({ length: this.playerCount }, (_, i) => i);
+        this.aliveSlots = [...this.activeSlots];
+
         // Handle Scene Switching
         const env = info.environment || (type === 'VOLCANO' ? 'VOLCANO' : 'ISLAND');
         setEnvironment(env);
 
-        resetPlayers();
+        resetPlayers(this.playerCount);
         clearGameObjects();
-        p1Mesh.position.set(-5, 0.1, 0);
-        p2Mesh.position.set(5, 0.1, 0);
-        this.p1Score = 0;
-        this.p2Score = 0;
+        this.scores = [0,0,0,0];
         this.boundaryLimit = 8;
         this.updateHud();
         let count = 3;
@@ -134,21 +145,19 @@ const GameManager = {
         ui.timer.style.display = 'block';
         this.state = 'PLAYING';
         this.timer = 0;
-        this.currentMinigame.start(p1Mesh, p2Mesh, this);
+        this.currentMinigame.start(this.getActiveMeshes(), this);
         this.updateHud();
     },
 
-    endGame(winner) {
+    endGame(winnerSlot) {
         this.state = 'RESULT';
         ui.timer.style.display = 'none';
         let text = '';
         let penalty = '';
-        if(winner === 1) {
-            text = 'PLAYER 1 WINS!';
-            penalty = this.getPenalty(2);
-        } else if (winner === 2) {
-            text = 'PLAYER 2 WINS!';
-            penalty = this.getPenalty(1);
+        if (typeof winnerSlot === 'number') {
+            text = `PLAYER ${winnerSlot + 1} WINS!`;
+            const losers = this.activeSlots.filter(s => s !== winnerSlot);
+            penalty = losers.length === 1 ? this.getPenalty(losers[0]) : 'Everyone else drinks 1 sip';
         } else {
             text = 'DRAW!';
             penalty = 'Everyone drinks 1 sip';
@@ -157,11 +166,11 @@ const GameManager = {
         ui.loserTask.innerText = penalty;
         if (ui.resultStatus) ui.resultStatus.innerText = 'Waiting for everyone to ready up…';
         ui.result.classList.add('active');
-        const winnerSlot = winner === 1 ? 0 : winner === 2 ? 1 : null;
         broadcastGameEnd(winnerSlot);
     },
 
-    getPenalty(loser) {
+    getPenalty(loserSlot) {
+        const loser = loserSlot + 1;
         if(this.currentGame === 'BRAWL') return `Player ${loser} drinks 1 sip`;
         if(this.currentGame === 'SURVIVAL') return `Player ${loser} drinks 2 sips`;
         if(this.currentGame === 'VOLCANO') return `Player ${loser} takes a SHOT (or 3 sips)`;
@@ -172,12 +181,27 @@ const GameManager = {
         return 'Drink up!';
     },
 
+    eliminatePlayer(slot) {
+        const idx = this.aliveSlots.indexOf(slot);
+        if (idx !== -1) this.aliveSlots.splice(idx, 1);
+        const mesh = playerMeshes[slot];
+        if (mesh) mesh.visible = false;
+        if (this.state === 'PLAYING') {
+            if (this.aliveSlots.length === 1) {
+                this.endGame(this.aliveSlots[0]);
+            } else if (this.aliveSlots.length === 0) {
+                this.endGame(null);
+            }
+            this.updateHud();
+        }
+    },
+
     prepareNextRound() {
         ui.result.classList.remove('active');
         ui.lobby.classList.add('active');
         setEnvironment('ISLAND');
         clearGameObjects();
-        resetPlayers();
+        resetPlayers(this.playerCount);
         this.state = 'LOBBY';
         this.boundaryLimit = 8;
         this.updateHud();
@@ -197,7 +221,7 @@ const GameManager = {
         ui.lobby.classList.add('active');
         setEnvironment('ISLAND');
         clearGameObjects();
-        resetPlayers();
+        resetPlayers(this.playerCount);
         this.state = 'LOBBY';
         this.boundaryLimit = 8;
         this.updateHud();
@@ -214,15 +238,13 @@ const GameManager = {
             if (this.state === 'LOBBY') return player.ready ? 'Ready' : 'Not ready';
             if (this.state === 'RESULT') return 'Tap ready for next round';
 
-            const isP1 = slot === 0;
-            const isP2 = slot === 1;
-            if (!isP1 && !isP2) return 'Spectating';
+            if (!this.activeSlots.includes(slot)) return 'Spectating';
 
             if(this.currentGame === 'COLLECT' || this.currentGame === 'SHELL') {
-                const score = isP1 ? this.p1Score : this.p2Score;
+                const score = this.scores[slot] || 0;
                 return `Score: ${score}`;
             } else if(this.currentGame === 'BRAWL' || this.currentGame === 'VOLCANO' || this.currentGame === 'GEYSER') {
-                const hp = isP1 ? (p1Mesh.hp || 0) : (p2Mesh.hp || 0);
+                const hp = playerMeshes[slot]?.hp ?? 0;
                 return `HP: ${hp}`;
             }
             return 'On the field';
@@ -235,9 +257,10 @@ const GameManager = {
     }
 };
 
-function clampPlayers(limit) {
-    p1Mesh.position.clamp(new THREE.Vector3(-limit,0,-limit), new THREE.Vector3(limit,1,limit));
-    p2Mesh.position.clamp(new THREE.Vector3(-limit,0,-limit), new THREE.Vector3(limit,1,limit));
+function clampPlayers(limit, meshes) {
+    meshes.forEach(mesh => {
+        mesh.position.clamp(new THREE.Vector3(-limit,0,-limit), new THREE.Vector3(limit,1,limit));
+    });
 }
 
 function playerCollidesWithObstacle(player) {
@@ -250,10 +273,10 @@ function playerCollidesWithObstacle(player) {
     return false;
 }
 
-function processObjects(dt) {
+function processObjects(dt, meshes, manager) {
     for (let i = gameObjects.length - 1; i >= 0; i--) {
         const obj = gameObjects[i];
-        
+
         // --- PROJECTILES (BRAWL) ---
         if (obj.type === 'projectile') {
             obj.mesh.position.add(obj.vel.clone().multiplyScalar(dt));
@@ -263,28 +286,28 @@ function processObjects(dt) {
                     hitCrate = true; break;
                 }
             }
-            const distP1 = obj.mesh.position.distanceTo(p1Mesh.position);
-            const distP2 = obj.mesh.position.distanceTo(p2Mesh.position);
+            let hitPlayer = null;
+            meshes.forEach(mesh => {
+                if (!hitPlayer && mesh.visible && obj.owner !== mesh.playerIndex && obj.mesh.position.distanceTo(mesh.position) < 1) {
+                    hitPlayer = mesh;
+                }
+            });
             if (hitCrate) {
                 removeObj(i);
-            } else if(obj.owner !== 1 && distP1 < 1) {
-                p1Mesh.hp--; removeObj(i); flashHit(p1Mesh); GameManager.updateHud();
-                if(p1Mesh.hp <= 0) GameManager.endGame(2);
-            } else if(obj.owner !== 2 && distP2 < 1) {
-                p2Mesh.hp--; removeObj(i); flashHit(p2Mesh); GameManager.updateHud();
-                if(p2Mesh.hp <= 0) GameManager.endGame(1);
+            } else if(hitPlayer) {
+                hitPlayer.hp--; removeObj(i); flashHit(hitPlayer); manager.updateHud();
+                if(hitPlayer.hp <= 0) manager.eliminatePlayer(hitPlayer.playerIndex);
             } else if (obj.mesh.position.length() > 20) {
                 removeObj(i);
             }
         }
         // --- COCONUTS (SURVIVAL) ---
         else if (obj.type === 'coconut') {
-            obj.mesh.position.y -= (10 + GameManager.timer) * dt;
+            obj.mesh.position.y -= (10 + manager.timer) * dt;
             if(obj.mesh.position.y < 0) {
-                const distP1 = obj.mesh.position.distanceTo(p1Mesh.position);
-                const distP2 = obj.mesh.position.distanceTo(p2Mesh.position);
-                if(distP1 < 1.5) GameManager.endGame(2);
-                else if(distP2 < 1.5) GameManager.endGame(1);
+                meshes.forEach(mesh => {
+                    if (mesh.visible && obj.mesh.position.distanceTo(mesh.position) < 1.5) manager.eliminatePlayer(mesh.playerIndex);
+                });
                 removeObj(i);
             }
             if(obj.shadow) obj.shadow.scale.setScalar(1 + (10 - obj.mesh.position.y)*0.1);
@@ -294,22 +317,15 @@ function processObjects(dt) {
             obj.mesh.position.y -= 15 * dt; // Fall fast
             obj.mesh.rotation.x += dt;
             obj.mesh.rotation.z += dt;
-            
+
             if(obj.mesh.position.y < 0) {
-                const distP1 = obj.mesh.position.distanceTo(p1Mesh.position);
-                const distP2 = obj.mesh.position.distanceTo(p2Mesh.position);
-                
-                // Hit Logic
-                if(distP1 < 1.5 && p1Mesh.stunned <= 0) {
-                    p1Mesh.hp--; p1Mesh.stunned = 1.5; // Stun for 1.5s
-                    flashHit(p1Mesh); GameManager.updateHud();
-                    if(p1Mesh.hp <= 0) GameManager.endGame(2);
-                }
-                if(distP2 < 1.5 && p2Mesh.stunned <= 0) {
-                    p2Mesh.hp--; p2Mesh.stunned = 1.5; 
-                    flashHit(p2Mesh); GameManager.updateHud();
-                    if(p2Mesh.hp <= 0) GameManager.endGame(1);
-                }
+                meshes.forEach(mesh => {
+                    if(obj.mesh.position.distanceTo(mesh.position) < 1.5 && (!mesh.stunned || mesh.stunned <= 0)) {
+                        mesh.hp--; mesh.stunned = 1.5; // Stun for 1.5s
+                        flashHit(mesh); manager.updateHud();
+                        if(mesh.hp <= 0) manager.eliminatePlayer(mesh.playerIndex);
+                    }
+                });
                 removeObj(i);
             }
             if(obj.shadow) obj.shadow.scale.setScalar(0.5 + (15 - obj.mesh.position.y)*0.1);
@@ -317,13 +333,12 @@ function processObjects(dt) {
         // --- PINEAPPLES (COLLECT) ---
         else if (obj.type === 'pineapple') {
             obj.mesh.rotation.y += dt * 2;
-            const distP1 = obj.mesh.position.distanceTo(p1Mesh.position);
-            const distP2 = obj.mesh.position.distanceTo(p2Mesh.position);
-            if(distP1 < 1) {
-                GameManager.p1Score += obj.value; removeObj(i); checkCollectionWin();
-            } else if (distP2 < 1) {
-                GameManager.p2Score += obj.value; removeObj(i); checkCollectionWin();
-            }
+            meshes.forEach(mesh => {
+                if (mesh.visible && obj.mesh.position.distanceTo(mesh.position) < 1) {
+                    manager.scores[mesh.playerIndex] = (manager.scores[mesh.playerIndex] || 0) + obj.value;
+                    removeObj(i); checkCollectionWin(manager);
+                }
+            });
         }
         // --- CRABS (CRAB DODGE) ---
         else if (obj.type === 'crab') {
@@ -333,20 +348,24 @@ function processObjects(dt) {
             obj.mesh.rotation.z += dt * 4 * Math.sign(obj.vel.x);
             if (Math.abs(obj.mesh.position.x) > 14) { removeObj(i); continue; }
 
-            if (GameManager.currentGame === 'CRAB') {
-                const distP1 = obj.mesh.position.distanceTo(p1Mesh.position);
-                const distP2 = obj.mesh.position.distanceTo(p2Mesh.position);
-                if (distP1 < 1) { GameManager.endGame(2); removeObj(i); }
-                else if (distP2 < 1) { GameManager.endGame(1); removeObj(i); }
+            if (manager.currentGame === 'CRAB') {
+                meshes.forEach(mesh => {
+                    if (mesh.visible && obj.mesh.position.distanceTo(mesh.position) < 1) { manager.eliminatePlayer(mesh.playerIndex); }
+                });
+                if (!manager.aliveSlots.some(slot => playerMeshes[slot].visible)) removeObj(i);
             }
         }
     }
 }
 
-function checkCollectionWin() {
-    GameManager.updateHud();
-    if(GameManager.p1Score >= 5) GameManager.endGame(1);
-    else if(GameManager.p2Score >= 5) GameManager.endGame(2);
+function checkCollectionWin(manager) {
+    manager.updateHud();
+    for (const slot of manager.activeSlots) {
+        if ((manager.scores[slot] || 0) >= 5) {
+            manager.endGame(slot);
+            break;
+        }
+    }
 }
 
 let lastTime = 0;
@@ -354,45 +373,38 @@ function animate(time) {
     requestAnimationFrame(animate);
     const dt = (time - lastTime) / 1000;
     lastTime = time;
-    const p1In = Input.getAxisForSlot(0);
-    const p2In = Input.getAxisForSlot(1);
+    const activeMeshes = GameManager.getActiveMeshes();
+    const inputs = GameManager.getActiveInputs();
     const speed = 8 * dt;
     const useCustomMovement = GameManager.state === 'PLAYING' && GameManager.currentMinigame && typeof GameManager.currentMinigame.handleMovement === 'function';
 
     if (GameManager.state === 'LOBBY' || GameManager.state === 'PLAYING') {
-        if (p1In.x !== 0 || p1In.z !== 0) {
-            p1Mesh.aimDir = new THREE.Vector3(p1In.x, 0, p1In.z).normalize();
-        }
-        if (p2In.x !== 0 || p2In.z !== 0) {
-            p2Mesh.aimDir = new THREE.Vector3(p2In.x, 0, p2In.z).normalize();
-        }
+        activeMeshes.forEach((mesh, idx) => {
+            const input = inputs[idx];
+            if (input && (input.x !== 0 || input.z !== 0)) {
+                mesh.aimDir = new THREE.Vector3(input.x, 0, input.z).normalize();
+            }
+        });
         if (!useCustomMovement) {
-            // Player 1 Movement (Blocked if stunned)
-            if ((!p1Mesh.stunned || p1Mesh.stunned <= 0) && (p1In.x !== 0 || p1In.z !== 0)) {
-                const oldPos = p1Mesh.position.clone();
-                p1Mesh.position.x += p1In.x * speed;
-                p1Mesh.position.z += p1In.z * speed;
-                p1Mesh.lookAt(p1Mesh.position.x + p1In.x, p1Mesh.position.y, p1Mesh.position.z + p1In.z);
-                if (GameManager.currentGame === 'BRAWL' && playerCollidesWithObstacle(p1Mesh)) {
-                    p1Mesh.position.copy(oldPos);
+            activeMeshes.forEach((mesh, idx) => {
+                const input = inputs[idx];
+                if (!input) return;
+                if ((!mesh.stunned || mesh.stunned <= 0) && (input.x !== 0 || input.z !== 0)) {
+                    const oldPos = mesh.position.clone();
+                    mesh.position.x += input.x * speed;
+                    mesh.position.z += input.z * speed;
+                    mesh.lookAt(mesh.position.x + input.x, mesh.position.y, mesh.position.z + input.z);
+                    if (GameManager.currentGame === 'BRAWL' && playerCollidesWithObstacle(mesh)) {
+                        mesh.position.copy(oldPos);
+                    }
                 }
-            }
-            // Player 2 Movement (Blocked if stunned)
-            if ((!p2Mesh.stunned || p2Mesh.stunned <= 0) && (p2In.x !== 0 || p2In.z !== 0)) {
-                const oldPos = p2Mesh.position.clone();
-                p2Mesh.position.x += p2In.x * speed;
-                p2Mesh.position.z += p2In.z * speed;
-                p2Mesh.lookAt(p2Mesh.position.x + p2In.x, p2Mesh.position.y, p2Mesh.position.z + p2In.z);
-                if (GameManager.currentGame === 'BRAWL' && playerCollidesWithObstacle(p2Mesh)) {
-                    p2Mesh.position.copy(oldPos);
-                }
-            }
+            });
         } else if (GameManager.state === 'PLAYING') {
-            GameManager.currentMinigame.handleMovement(dt, { p1: p1In, p2: p2In }, p1Mesh, p2Mesh);
+            GameManager.currentMinigame.handleMovement(dt, inputs, activeMeshes, GameManager);
         }
 
         if (GameManager.state === 'PLAYING' && GameManager.boundaryLimit !== null && (!useCustomMovement || GameManager.currentMinigame.allowClampAfterMovement)) {
-            clampPlayers(GameManager.boundaryLimit ?? 8);
+            clampPlayers(GameManager.boundaryLimit ?? 8, activeMeshes);
         }
     }
 
@@ -402,15 +414,20 @@ function animate(time) {
         // Time limit ends game (Player with most HP wins in Volcano/Brawl)
         if(GameManager.timer >= 30 && GameManager.currentGame !== 'COLLECT' && GameManager.currentGame !== 'SHELL') {
             if(GameManager.currentGame === 'BRAWL' || GameManager.currentGame === 'VOLCANO' || GameManager.currentGame === 'GEYSER') {
-                if(p1Mesh.hp > p2Mesh.hp) GameManager.endGame(1);
-                else if(p2Mesh.hp > p1Mesh.hp) GameManager.endGame(2);
-                else GameManager.endGame(0);
+                let bestSlot = null; let bestHp = -Infinity; let tie = false;
+                GameManager.activeSlots.forEach(slot => {
+                    const hp = playerMeshes[slot]?.hp ?? 0;
+                    if (hp > bestHp) { bestHp = hp; bestSlot = slot; tie = false; }
+                    else if (hp === bestHp) { tie = true; }
+                });
+                if (!tie && bestSlot !== null) GameManager.endGame(bestSlot);
+                else GameManager.endGame(null);
             } else {
-                GameManager.endGame(0);
+                GameManager.endGame(null);
             }
         }
-        GameManager.currentMinigame.update(dt, { p1: p1In, p2: p2In }, p1Mesh, p2Mesh, GameManager.timer, GameManager);
-        processObjects(dt);
+        GameManager.currentMinigame.update(dt, inputs, activeMeshes, GameManager.timer, GameManager);
+        processObjects(dt, activeMeshes, GameManager);
     }
 
     updateCamera(GameManager.state);
@@ -439,6 +456,6 @@ export function bootstrapGame() {
         GameManager.handleAllReady();
     }
     setEnvironment('ISLAND');
-    resetPlayers();
+    resetPlayers(GameManager.playerCount);
     animate(0);
 }

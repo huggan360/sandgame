@@ -13,11 +13,10 @@ export class ShellSprintGame {
         };
     }
 
-    start(_p1Mesh, _p2Mesh, manager) {
+    start(players, manager) {
         this.cleanupTarget();
         if (manager) {
-            manager.p1Score = 0;
-            manager.p2Score = 0;
+            manager.activeSlots.forEach(slot => manager.scores[slot] = 0);
             manager.updateHud();
         }
         this.spawnNewTarget();
@@ -38,7 +37,7 @@ export class ShellSprintGame {
         }
     }
 
-    update(dt, _input, p1Mesh, p2Mesh, _timer, manager) {
+    update(dt, _input, players, _timer, manager) {
         if (!this.activeTarget) this.spawnNewTarget();
         if (!this.activeTarget || !manager) return;
 
@@ -50,21 +49,20 @@ export class ShellSprintGame {
             ring.scale.setScalar(1 + Math.sin(performance.now() * 0.005) * 0.05);
         }
 
-        const tryCapture = (playerId, playerMesh) => {
+        const tryCapture = (playerMesh) => {
             if (mesh.position.distanceTo(playerMesh.position) < 1.2) {
-                if (playerId === 1) manager.p1Score++;
-                else manager.p2Score++;
+                manager.scores[playerMesh.playerIndex] = (manager.scores[playerMesh.playerIndex] || 0) + 1;
                 manager.updateHud();
 
-                if (manager.p1Score >= 3) manager.endGame(1);
-                else if (manager.p2Score >= 3) manager.endGame(2);
+                if (manager.scores[playerMesh.playerIndex] >= 3) manager.endGame(playerMesh.playerIndex);
                 if (manager.state === 'PLAYING') this.spawnNewTarget();
                 return true;
             }
             return false;
         };
 
-        if (tryCapture(1, p1Mesh)) return;
-        tryCapture(2, p2Mesh);
+        for (const mesh of players) {
+            if (tryCapture(mesh)) break;
+        }
     }
 }

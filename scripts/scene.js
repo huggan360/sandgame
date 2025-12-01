@@ -23,6 +23,8 @@ scene.add(dirLight);
 export const mats = {
     p1: new THREE.MeshStandardMaterial({ color: 0x00ffaa }),
     p2: new THREE.MeshStandardMaterial({ color: 0xff00ff }),
+    p3: new THREE.MeshStandardMaterial({ color: 0xffd166 }),
+    p4: new THREE.MeshStandardMaterial({ color: 0x60a5fa }),
     sand: new THREE.MeshStandardMaterial({ color: 0xF4A460 }),
     water: new THREE.MeshStandardMaterial({ color: 0x006994, transparent: true, opacity: 0.8 }),
     wood: new THREE.MeshStandardMaterial({ color: 0x8B4513 }),
@@ -106,25 +108,27 @@ function createPlayerMesh(mat) {
 
 export const p1Mesh = createPlayerMesh(mats.p1);
 export const p2Mesh = createPlayerMesh(mats.p2);
-scene.add(p1Mesh, p2Mesh);
+export const p3Mesh = createPlayerMesh(mats.p3);
+export const p4Mesh = createPlayerMesh(mats.p4);
+export const playerMeshes = [p1Mesh, p2Mesh, p3Mesh, p4Mesh];
+scene.add(p1Mesh, p2Mesh, p3Mesh, p4Mesh);
 
 export let gameObjects = [];
 
-export function resetPlayers() {
-    p1Mesh.position.set(-3, 0, 0);
-    p2Mesh.position.set(3, 0, 0);
-    p1Mesh.rotation.set(0, Math.PI/2, 0);
-    p2Mesh.rotation.set(0, -Math.PI/2, 0);
-    p1Mesh.aimDir = new THREE.Vector3(1, 0, 0);
-    p2Mesh.aimDir = new THREE.Vector3(-1, 0, 0);
-    p1Mesh.visible = true;
-    p2Mesh.visible = true;
-    p1Mesh.stunned = 0;
-    p2Mesh.stunned = 0;
-    p1Mesh.slideVel = new THREE.Vector3();
-    p2Mesh.slideVel = new THREE.Vector3();
-    p1Mesh.falling = false;
-    p2Mesh.falling = false;
+export function resetPlayers(count = 2) {
+    const radius = 5;
+    playerMeshes.forEach((mesh, idx) => {
+        const angle = (idx / count) * Math.PI * 2;
+        mesh.position.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+        mesh.rotation.set(0, angle + Math.PI, 0);
+        mesh.aimDir = new THREE.Vector3(Math.cos(angle + Math.PI), 0, Math.sin(angle + Math.PI));
+        mesh.visible = idx < count;
+        mesh.stunned = 0;
+        mesh.slideVel = new THREE.Vector3();
+        mesh.falling = false;
+        mesh.playerIndex = idx;
+        mesh.hp = 1;
+    });
 }
 
 export function clearGameObjects() {

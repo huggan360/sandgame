@@ -1,8 +1,7 @@
 export class SkySlamGame {
     constructor() {
         this.radius = 7.2;
-        this.p1Cooldown = 0;
-        this.p2Cooldown = 0;
+        this.cooldowns = [];
     }
 
     get meta() {
@@ -14,19 +13,19 @@ export class SkySlamGame {
         };
     }
 
-    start(p1Mesh, p2Mesh, manager) {
-        this.p1Cooldown = 0;
-        this.p2Cooldown = 0;
+    start(players, manager) {
+        this.cooldowns = players.map(() => 0);
         manager.boundaryLimit = null; // custom edge handling
-        p1Mesh.slideVel = new THREE.Vector3();
-        p2Mesh.slideVel = new THREE.Vector3();
-        p1Mesh.falling = false;
-        p2Mesh.falling = false;
-        p1Mesh.position.set(-3, 0.1, 0);
-        p2Mesh.position.set(3, 0.1, 0);
+        const radius = 3.5;
+        players.forEach((mesh, idx) => {
+            const angle = (idx / players.length) * Math.PI * 2;
+            mesh.slideVel = new THREE.Vector3();
+            mesh.falling = false;
+            mesh.position.set(Math.cos(angle) * radius, 0.1, Math.sin(angle) * radius);
+        });
     }
 
-    handleMovement(dt, input, p1Mesh, p2Mesh) {
+    handleMovement(dt, input, players) {
         const accel = 18;
         const friction = Math.pow(0.985, dt * 60);
         const applyInput = (mesh, controls) => {
@@ -41,8 +40,7 @@ export class SkySlamGame {
             mesh.position.y = Math.max(mesh.position.y, mesh.falling ? -100 : 0.08);
         };
 
-        applyInput(p1Mesh, input.p1);
-        applyInput(p2Mesh, input.p2);
+        players.forEach((mesh, idx) => applyInput(mesh, input[idx] || { x:0, z:0, action:false }));
     }
 
     push(attacker, defender, cooldownSetter) {
@@ -55,18 +53,25 @@ export class SkySlamGame {
         cooldownSetter();
     }
 
-    update(dt, input, p1Mesh, p2Mesh, _timer, manager) {
-        this.p1Cooldown = Math.max(0, this.p1Cooldown - dt);
-        this.p2Cooldown = Math.max(0, this.p2Cooldown - dt);
+    update(dt, input, players, _timer, manager) {
+        this.cooldowns = this.cooldowns.map(cd => Math.max(0, cd - dt));
 
-        if (input.p1.action && this.p1Cooldown <= 0) this.push(p1Mesh, p2Mesh, () => this.p1Cooldown = 1.1);
-        if (input.p2.action && this.p2Cooldown <= 0) this.push(p2Mesh, p1Mesh, () => this.p2Cooldown = 1.1);
+        players.forEach((mesh, idx) => {
+            if (input[idx]?.action && this.cooldowns[idx] <= 0) {
+                const target = players
+                    .filter(p => p !== mesh && p.visible !== false)
+                    .sort((a, b) => mesh.position.distanceTo(a.position) - mesh.position.distanceTo(b.position))[0];
+                if (target && mesh.position.distanceTo(target.position) < 2.5) {
+                    this.push(mesh, target, () => this.cooldowns[idx] = 1.1);
+                }
+            }
+        });
 
-        const checkFall = (mesh, playerId) => {
+        const checkFall = (mesh) => {
             if (mesh.falling) {
                 mesh.slideVel.multiplyScalar(0.99);
                 mesh.position.y -= dt * 6;
-                if (mesh.position.y < -5) manager.endGame(playerId === 1 ? 2 : 1);
+                if (mesh.position.y < -5) manager.eliminatePlayer(mesh.playerIndex);
                 return;
             }
 
@@ -77,7 +82,6 @@ export class SkySlamGame {
             }
         };
 
-        checkFall(p1Mesh, 1);
-        checkFall(p2Mesh, 2);
+        players.forEach(checkFall);
     }
 }
