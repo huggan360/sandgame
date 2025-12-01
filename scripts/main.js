@@ -264,7 +264,7 @@ const GameManager = {
             if(this.currentGame === 'COLLECT' || this.currentGame === 'SHELL') {
                 const score = this.scores[slot] || 0;
                 return `Score: ${score}`;
-            } else if(this.currentGame === 'BRAWL' || this.currentGame === 'VOLCANO' || this.currentGame === 'TANK') {
+            } else if(this.currentGame === 'BRAWL' || this.currentGame === 'VOLCANO' || this.currentGame === 'TANK' || this.currentGame === 'CRAB') {
                 const hp = playerMeshes[slot]?.hp ?? 0;
                 return `HP: ${hp}`;
             }
@@ -377,13 +377,19 @@ function processObjects(dt, meshes, manager) {
         else if (obj.type === 'crab') {
             obj.t += dt;
             obj.mesh.position.add(obj.vel.clone().multiplyScalar(dt));
-            obj.mesh.position.z += Math.sin(obj.t * 4) * dt * 1.5;
+            obj.mesh.position.z += Math.sin(obj.t * (obj.swaySpeed || 4.5)) * dt * (obj.swayAmp || 2.5);
             obj.mesh.rotation.z += dt * 4 * Math.sign(obj.vel.x);
             if (Math.abs(obj.mesh.position.x) > 14) { removeObj(i); continue; }
 
             if (manager.currentGame === 'CRAB') {
                 meshes.forEach(mesh => {
-                    if (mesh.visible && obj.mesh.position.distanceTo(mesh.position) < 1) { manager.eliminatePlayer(mesh.playerIndex); }
+                    if (mesh.visible && obj.mesh.position.distanceTo(mesh.position) < 1 && (!mesh.stunned || mesh.stunned <= 0)) {
+                        mesh.hp = Math.max(0, (mesh.hp ?? 0) - 1);
+                        mesh.stunned = 1.5;
+                        flashHit(mesh);
+                        manager.updateHud();
+                        if (mesh.hp <= 0) manager.eliminatePlayer(mesh.playerIndex);
+                    }
                 });
                 if (!manager.aliveSlots.some(slot => playerMeshes[slot].visible)) removeObj(i);
             }
@@ -446,7 +452,7 @@ function animate(time) {
         ui.timer.innerText = Math.max(0, Math.floor(30 - GameManager.timer)).toString();
         // Time limit ends game (Player with most HP wins in Volcano/Brawl/Tank)
         if(GameManager.timer >= 30 && GameManager.currentGame !== 'COLLECT' && GameManager.currentGame !== 'SHELL') {
-            if(GameManager.currentGame === 'BRAWL' || GameManager.currentGame === 'VOLCANO' || GameManager.currentGame === 'TANK') {
+            if(GameManager.currentGame === 'BRAWL' || GameManager.currentGame === 'VOLCANO' || GameManager.currentGame === 'TANK' || GameManager.currentGame === 'CRAB') {
                 let bestSlot = null; let bestHp = -Infinity; let tie = false;
                 GameManager.activeSlots.forEach(slot => {
                     const hp = playerMeshes[slot]?.hp ?? 0;
