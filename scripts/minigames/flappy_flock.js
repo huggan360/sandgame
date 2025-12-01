@@ -20,7 +20,7 @@ function createNameLabel(text, color) {
     const texture = new THREE.CanvasTexture(canvas);
     const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false });
     const plane = new THREE.Mesh(new THREE.PlaneGeometry(2, 0.5), material);
-    plane.position.set(0, -0.8, 0);
+    plane.position.set(0, -1.2, 0);
     return plane;
 }
 
@@ -33,12 +33,13 @@ export class FlappyFlockGame {
         this.gravity = -10;
         this.flapStrength = 7;
         this.scrollSpeed = 6;
+        this.originalCamera = scene.camera;
     }
 
     get meta() {
         return {
             title: 'Flappy Flock',
-            description: 'Tap to flap your bird and weave through palm pipes. Last flyer standing wins.',
+            description: 'Tap to flap your bird and weave through the pipes. Last flyer standing wins.',
             penalty: '2 Sips',
             environment: 'FLAPPY'
         };
@@ -50,18 +51,13 @@ export class FlappyFlockGame {
         }
         const group = new THREE.Group();
         const color = mesh.body?.material?.color?.getHex() || mats.p1.color.getHex();
-        const body = new THREE.Mesh(new THREE.SphereGeometry(0.6, 18, 18), new THREE.MeshStandardMaterial({ color }));
+        const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), new THREE.MeshStandardMaterial({ color }));
         body.castShadow = true;
         group.add(body);
 
-        const beak = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.35, 10), mats.gold);
-        beak.rotation.z = Math.PI / 2;
-        beak.position.set(0.65, 0, 0);
-        body.add(beak);
-
         const wingMat = new THREE.MeshStandardMaterial({ color, opacity: 0.85, transparent: true });
-        const wing = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.25, 0.05), wingMat);
-        wing.position.set(-0.05, 0, 0.35);
+        const wing = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.5, 1), wingMat);
+        wing.position.set(-0.3, 0, 0);
         body.add(wing);
 
         const label = createNameLabel(name, `#${color.toString(16).padStart(6, '0')}`);
@@ -98,10 +94,22 @@ export class FlappyFlockGame {
         this.pipeTimer = 1.2;
         this.lastActions = [];
         manager.setBoundaryLimit(null);
+        
+        const aspect = window.innerWidth / window.innerHeight;
+        const frustumSize = 12;
+        this.orthoCamera = new THREE.OrthographicCamera(frustumSize * aspect / -2, frustumSize * aspect / 2, frustumSize / 2, frustumSize / -2, 1, 1000);
+        this.orthoCamera.position.set(0, 6, 10);
+        this.orthoCamera.lookAt(0, 6, 0);
+        scene.camera = this.orthoCamera;
+
+        const rowY = 5;
+        const numPlayers = players.length;
+        const spacing = 2;
+        const startX = - (numPlayers - 1) * spacing / 2;
+
         players.forEach((mesh, idx) => {
-            const laneOffset = (idx - (players.length - 1) / 2) * 2;
-            mesh.position.set(-6, 5, laneOffset - 8);
-            mesh.rotation.set(0, Math.PI / 2, 0);
+            mesh.position.set(startX + idx * spacing, rowY, -8);
+            mesh.rotation.set(0, 0, 0);
             mesh.velY = 0;
             mesh.visible = true;
             mesh.stunned = 0;
@@ -112,6 +120,10 @@ export class FlappyFlockGame {
         });
         manager.updateHud();
     }
+    
+    cleanup(manager) {
+        scene.camera = this.originalCamera;
+    }
 
     handleCrash(mesh, manager) {
         mesh.hp = 0;
@@ -121,7 +133,7 @@ export class FlappyFlockGame {
 
     handleMovement(dt, inputs, players, manager) {
         players.forEach((mesh, idx) => {
-            if (!mesh.visible) return;
+            if (!mesh.visible || mesh.hp <=0) return;
             const input = inputs[idx] || {};
             const justPressed = input.action && !this.lastActions[idx];
             if (justPressed) {
@@ -131,9 +143,13 @@ export class FlappyFlockGame {
 
             mesh.velY += this.gravity * dt;
             mesh.position.y += mesh.velY * dt;
-            mesh.position.y = Math.max(0.5, mesh.position.y);
 
-            if (mesh.position.y <= 0.5 || mesh.position.y > 12) {
+            if (mesh.position.y > 11.5) {
+                mesh.position.y = 11.5;
+                mesh.velY = 0;
+            }
+
+            if (mesh.position.y < 0.5) {
                 this.handleCrash(mesh, manager);
             }
         });
@@ -151,12 +167,13 @@ export class FlappyFlockGame {
             }
 
             players.forEach(mesh => {
-                if (!mesh.visible) return;
+                if (!mesh.visible || mesh.hp <= 0) return;
                 const dx = Math.abs(mesh.position.x - obj.mesh.position.x);
-                const withinPipe = dx < obj.width;
+                const withinPipe = dx < (obj.width / 2 + 0.4);
                 const gapTop = obj.gapY + this.gapSize / 2;
                 const gapBottom = obj.gapY - this.gapSize / 2;
-                if (withinPipe && (mesh.position.y > gapTop || mesh.position.y < gapBottom)) {
+                
+                if (withinPipe && (mesh.position.y > gapTop - 0.4 || mesh.position.y < gapBottom + 0.4)) {
                     this.handleCrash(mesh, manager);
                 }
 
@@ -181,8 +198,8 @@ export class FlappyFlockGame {
 
         if (manager.state !== 'PLAYING') return;
 
-        if (manager.aliveSlots.length === 1) {
-            manager.endGame(manager.aliveSlots[0]);
+        if (manager.aliveSlots.length <= 1 && players.length > 1) {
+            manager.endGame(manager.aliveSlots[0] ?? null);
         } else if (manager.aliveSlots.length === 0) {
             manager.endGame(null);
         }

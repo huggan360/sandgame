@@ -3,7 +3,11 @@ export const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);
 scene.fog = new THREE.Fog(0x87CEEB, 20, 60);
 
-export const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+const aspect = window.innerWidth / window.innerHeight;
+const camWidth = 20;
+const camHeight = camWidth / aspect;
+
+export const camera = new THREE.OrthographicCamera(camWidth / -2, camWidth / 2, camHeight / 2, camHeight / -2, 0.1, 1000);
 export const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
