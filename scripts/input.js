@@ -1,8 +1,18 @@
+import { getPartyInputs } from './party.js';
+
 export const Input = {
     keys: {},
     init() {
         window.addEventListener('keydown', e => this.keys[e.code] = true);
         window.addEventListener('keyup', e => this.keys[e.code] = false);
+    },
+    getAxisForSlot(index) {
+        const partyInputs = getPartyInputs();
+        if (partyInputs[index]) return partyInputs[index];
+        // Keyboard fallback for first two slots
+        if (index === 0) return this.getP1Axis();
+        if (index === 1) return this.getP2Axis();
+        return { x: 0, z: 0, action: false };
     },
     getP1Axis() {
         let x = 0, z = 0;

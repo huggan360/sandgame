@@ -4,6 +4,7 @@ import {
     gameObjects, resetPlayers, clearGameObjects, removeObj, flashHit,
     setEnvironment, updateCamera
 } from './scene.js';
+import { broadcastStart, getPartyCode, syncLobbyUI } from './party.js';
 import { BrawlGame } from './minigames/brawl.js';
 import { SurvivalGame } from './minigames/survival.js';
 import { CollectGame } from './minigames/collect.js';
@@ -54,6 +55,7 @@ const GameManager = {
     boundaryLimit: 8,
 
     spinWheel() {
+        broadcastStart();
         ui.lobby.classList.remove('active');
         ui.wheel.classList.add('active');
         const slice = 360 / minigameOrder.length;
@@ -308,8 +310,8 @@ function animate(time) {
     requestAnimationFrame(animate);
     const dt = (time - lastTime) / 1000;
     lastTime = time;
-    const p1In = Input.getP1Axis();
-    const p2In = Input.getP2Axis();
+    const p1In = Input.getAxisForSlot(0);
+    const p2In = Input.getAxisForSlot(1);
     const speed = 8 * dt;
     const useCustomMovement = GameManager.state === 'PLAYING' && GameManager.currentMinigame && typeof GameManager.currentMinigame.handleMovement === 'function';
 
@@ -371,7 +373,16 @@ function animate(time) {
     renderer.render(scene, camera);
 }
 
-window.GameManager = GameManager;
-setEnvironment('ISLAND');
-resetPlayers();
-animate(0);
+export function bootstrapGame() {
+    window.GameManager = GameManager;
+    const partyLink = document.getElementById('party-link');
+    if (partyLink) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('controller', getPartyCode());
+        partyLink.innerText = `Share this link: ${url.toString()}`;
+    }
+    syncLobbyUI();
+    setEnvironment('ISLAND');
+    resetPlayers();
+    animate(0);
+}

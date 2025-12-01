@@ -128,10 +128,123 @@
             display: flex; gap: 20px; color: white; margin-top: 20px; font-weight: bold; text-shadow: 1px 1px 2px black;
         }
         .legend-item span { display: inline-block; width: 15px; height: 15px; margin-right: 5px; border: 2px solid white; }
+
+        /* Party Lobby */
+        #party-panel {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 14px;
+        }
+
+        .pill {
+            padding: 10px 14px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: white;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .pill .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff7eb3;
+            box-shadow: 0 0 10px currentColor;
+        }
+
+        .pill.ready .dot { background: #31ffb0; }
+
+        #party-link {
+            background: rgba(0,0,0,0.4);
+            border-radius: 14px;
+            padding: 12px;
+            color: #fefefe;
+            border: 1px dashed rgba(255,255,255,0.25);
+            margin-top: 10px;
+            font-size: 0.95rem;
+        }
+
+        #start-btn[disabled] { opacity: 0.6; cursor: not-allowed; }
+
+        /* Controller Page */
+        #controller-screen {
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(circle at 30% 20%, #2b5876, #172139 60%);
+            display: none;
+            color: white;
+            padding: 24px;
+            box-sizing: border-box;
+        }
+
+        #controller-screen.active { display: flex; flex-direction: column; gap: 20px; }
+
+        .controller-card {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 18px;
+            padding: 18px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+
+        #controller-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            align-items: center;
+        }
+
+        .pad-btn {
+            background: linear-gradient(145deg, #3b8d99, #2b5876);
+            border: none;
+            color: white;
+            padding: 16px;
+            font-size: 1.4rem;
+            border-radius: 14px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.1), 0 10px 25px rgba(0,0,0,0.25);
+            touch-action: manipulation;
+        }
+
+        .pad-btn:active { transform: scale(0.96); }
+
+        #ready-toggle {
+            width: 100%;
+            background: linear-gradient(120deg, #31ffb0, #0ea16b);
+            color: #0d2a20;
+            font-weight: 800;
+            padding: 16px;
+            border-radius: 14px;
+            border: none;
+            font-size: 1.1rem;
+        }
+
+        #ready-toggle.waiting { background: linear-gradient(120deg, #ff9a9e, #f6416c); color: white; }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
+
+    <div id="controller-screen">
+        <div class="controller-card" id="controller-status">
+            <h2 style="margin:0 0 6px;">Join the Island Party</h2>
+            <p id="controller-code" style="margin:0;color:#cdd9e5;font-size:0.95rem;">Loading...</p>
+        </div>
+        <button id="ready-toggle" class="waiting">Tap Ready</button>
+        <div id="controller-grid">
+            <button class="pad-btn" data-dir="up">⬆️</button>
+            <button class="pad-btn" data-action="true" style="grid-row: span 2; font-size: 1.8rem;">✨</button>
+            <button class="pad-btn" data-dir="left">⬅️</button>
+            <button class="pad-btn" data-dir="down">⬇️</button>
+            <button class="pad-btn" data-dir="right">➡️</button>
+        </div>
+    </div>
 
     <div id="ui-layer">
         <div class="hud-top">
@@ -162,12 +275,15 @@
         <!-- Lobby UI -->
         <div id="lobby-card" class="card active">
             <h1>TROPICAL LOBBY</h1>
-            <p style="color: #aaa;">2 Players Ready</p>
+            <p style="color: #aaa;" id="party-status">Waiting for phones to join…</p>
+            <div id="party-panel"></div>
+            <div id="party-link"></div>
             <div class="controls-hint">
+                <div style="font-weight:bold;">Keyboard fallback</div>
                 <div>P1: <span class="key">WASD</span> + <span class="key">SPACE</span></div>
                 <div>P2: <span class="key">ARROWS</span> + <span class="key">ENTER</span></div>
             </div>
-            <button class="btn" onclick="GameManager.spinWheel()">START ROUND</button>
+            <button id="start-btn" class="btn" onclick="GameManager.spinWheel()" disabled>START ROUND</button>
         </div>
 
         <!-- Result UI -->
@@ -187,6 +303,6 @@
         </div>
     </div>
 
-        <script type="module" src="scripts/main.js"></script>
+        <script type="module" src="scripts/entry.js"></script>
 </body>
 </html>
