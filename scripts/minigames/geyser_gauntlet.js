@@ -11,7 +11,7 @@ export class GeyserGauntletGame {
     constructor() {
         this.spawnTimer = 0.6;
         this.warningTime = 1.2;
-        this.iframes = { 1: 0, 2: 0 };
+        this.iframes = {};
         this.armSpeed = 0.9;
     }
 
@@ -24,12 +24,11 @@ export class GeyserGauntletGame {
         };
     }
 
-    start(p1Mesh, p2Mesh, manager) {
+    start(players, manager) {
         this.spawnTimer = 0.5;
-        this.iframes = { 1: 0, 2: 0 };
+        this.iframes = {};
         this.createSweepArm();
-        p1Mesh.hp = 4;
-        p2Mesh.hp = 4;
+        players.forEach(p => { p.hp = 4; this.iframes[p.playerIndex] = 0; });
         manager.boundaryLimit = 7.5;
     }
 
@@ -69,7 +68,7 @@ export class GeyserGauntletGame {
         gameObjects.push({ type: 'geyser_warning', mesh: ring, parts: [sparkle], timer: this.warningTime });
     }
 
-    eruptGeyser(index, p1Mesh, p2Mesh, manager) {
+    eruptGeyser(index, players, manager) {
         const warning = gameObjects[index];
         const pos = warning.mesh.position.clone();
         scene.remove(warning.mesh);
@@ -81,11 +80,12 @@ export class GeyserGauntletGame {
         scene.add(plume);
 
         gameObjects[index] = { type: 'geyser_burst', mesh: plume, timer: 0.7 };
-        this.blastPlayers(pos, p1Mesh, p2Mesh, manager);
+        this.blastPlayers(pos, players, manager);
     }
 
-    blastPlayers(origin, p1Mesh, p2Mesh, manager) {
-        const apply = (playerMesh, playerId) => {
+    blastPlayers(origin, players, manager) {
+        const apply = (playerMesh) => {
+            const playerId = playerMesh.playerIndex;
             const dist = origin.distanceTo(playerMesh.position);
             if (dist < 1.7 && this.iframes[playerId] <= 0) {
                 this.iframes[playerId] = 0.5;
@@ -95,15 +95,15 @@ export class GeyserGauntletGame {
                 if (pushDir.lengthSq() > 0) playerMesh.position.add(pushDir.multiplyScalar(1.4));
                 flashHit(playerMesh);
                 manager.updateHud();
-                if (playerMesh.hp <= 0) manager.endGame(playerId === 1 ? 2 : 1);
+                if (playerMesh.hp <= 0) manager.eliminatePlayer(playerId);
             }
         };
 
-        apply(p1Mesh, 1);
-        apply(p2Mesh, 2);
+        players.forEach(apply);
     }
 
-    hitBySweep(playerMesh, dir, playerId, manager) {
+    hitBySweep(playerMesh, dir, manager) {
+        const playerId = playerMesh.playerIndex;
         if (this.iframes[playerId] > 0) return;
         this.iframes[playerId] = 0.4;
         playerMesh.hp -= 1;
@@ -111,13 +111,12 @@ export class GeyserGauntletGame {
         playerMesh.position.add(dir.clone().setY(0).normalize().multiplyScalar(1.2));
         flashHit(playerMesh);
         manager.updateHud();
-        if (playerMesh.hp <= 0) manager.endGame(playerId === 1 ? 2 : 1);
+        if (playerMesh.hp <= 0) manager.eliminatePlayer(playerId);
     }
 
-    update(dt, _input, p1Mesh, p2Mesh, timer, manager) {
+    update(dt, _input, players, timer, manager) {
         this.spawnTimer -= dt;
-        this.iframes[1] = Math.max(0, this.iframes[1] - dt);
-        this.iframes[2] = Math.max(0, this.iframes[2] - dt);
+        Object.keys(this.iframes).forEach(k => this.iframes[k] = Math.max(0, this.iframes[k] - dt));
 
         if (this.spawnTimer <= 0) {
             this.spawnWarning();
@@ -130,7 +129,7 @@ export class GeyserGauntletGame {
                 obj.timer -= dt;
                 obj.mesh.material.opacity = 0.15 + (1 - obj.timer / this.warningTime) * 0.35;
                 if (obj.parts && obj.parts[0]) obj.parts[0].rotation.y += dt * 4;
-                if (obj.timer <= 0) this.eruptGeyser(i, p1Mesh, p2Mesh, manager);
+                if (obj.timer <= 0) this.eruptGeyser(i, players, manager);
             }
             else if (obj.type === 'geyser_burst') {
                 obj.timer -= dt;
@@ -142,10 +141,10 @@ export class GeyserGauntletGame {
                 const dir = new THREE.Vector3(Math.sin(obj.mesh.rotation.y), 0, Math.cos(obj.mesh.rotation.y));
                 const a = dir.clone().multiplyScalar(-6);
                 const b = dir.clone().multiplyScalar(6);
-                const p1 = new THREE.Vector3(p1Mesh.position.x, 0, p1Mesh.position.z);
-                const p2 = new THREE.Vector3(p2Mesh.position.x, 0, p2Mesh.position.z);
-                if (distanceToSegmentXZ(p1, a, b) < 0.75) this.hitBySweep(p1Mesh, dir, 1, manager);
-                if (distanceToSegmentXZ(p2, a, b) < 0.75) this.hitBySweep(p2Mesh, dir, 2, manager);
+                players.forEach(mesh => {
+                    const p = new THREE.Vector3(mesh.position.x, 0, mesh.position.z);
+                    if (distanceToSegmentXZ(p, a, b) < 0.75) this.hitBySweep(mesh, dir, manager);
+                });
             }
         }
     }

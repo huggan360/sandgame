@@ -2,8 +2,7 @@ import { spawnObstacles, spawnProjectile } from '../scene.js';
 
 export class BrawlGame {
     constructor() {
-        this.p1ShootCd = 0;
-        this.p2ShootCd = 0;
+        this.cooldowns = [];
     }
 
     get meta() {
@@ -14,24 +13,20 @@ export class BrawlGame {
         };
     }
 
-    start(p1Mesh, p2Mesh) {
-        this.p1ShootCd = 0;
-        this.p2ShootCd = 0;
-        p1Mesh.hp = 3;
-        p2Mesh.hp = 3;
+    start(players) {
+        this.cooldowns = players.map(() => 0);
+        players.forEach(p => p.hp = 3);
         spawnObstacles();
     }
 
-    update(dt, input, p1Mesh, p2Mesh) {
-        if(this.p1ShootCd > 0) this.p1ShootCd -= dt;
-        if(input.p1.action && this.p1ShootCd <= 0) {
-            spawnProjectile(p1Mesh, 1);
-            this.p1ShootCd = 0.45;
-        }
-        if(this.p2ShootCd > 0) this.p2ShootCd -= dt;
-        if(input.p2.action && this.p2ShootCd <= 0) {
-            spawnProjectile(p2Mesh, 2);
-            this.p2ShootCd = 0.45;
-        }
+    update(dt, input, players) {
+        this.cooldowns = this.cooldowns || [];
+        players.forEach((mesh, idx) => {
+            this.cooldowns[idx] = Math.max(0, (this.cooldowns[idx] || 0) - dt);
+            if (input[idx]?.action && this.cooldowns[idx] <= 0) {
+                spawnProjectile(mesh, mesh.playerIndex);
+                this.cooldowns[idx] = 0.45;
+            }
+        });
     }
 }
