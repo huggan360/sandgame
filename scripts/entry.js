@@ -26,10 +26,46 @@ function setupControllerButtons(prefillCode) {
     const statusLine = document.getElementById('controller-status-text');
     const codeStep = document.getElementById('code-step');
     const nameStep = document.getElementById('name-step');
+    const statusCard = document.getElementById('controller-status');
+    const screen = document.getElementById('controller-screen');
+    const leaderboardCard = document.getElementById('controller-leaderboard');
+    const leaderboardList = document.getElementById('leaderboard-list');
     if (codeInput && prefillCode) codeInput.value = prefillCode.toUpperCase();
 
     const readyBtn = document.getElementById('ready-toggle');
     let connected = false;
+
+    const setReadyWaiting = () => {
+        if (!readyBtn) return;
+        readyBtn.classList.add('waiting');
+        readyBtn.classList.remove('ready');
+        readyBtn.innerText = 'Tap Ready';
+        readyBtn.disabled = false;
+    };
+
+    const renderLeaderboard = (entries, selfId) => {
+        if (!leaderboardList) return;
+        leaderboardList.innerHTML = '';
+        entries.forEach(entry => {
+            const row = document.createElement('div');
+            row.className = 'leaderboard-row';
+            if (entry.id && entry.id === selfId) row.classList.add('mine');
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'name';
+            const badge = document.createElement('span');
+            badge.className = 'badge';
+            badge.style.background = entry.color || '#fff';
+            nameSpan.appendChild(badge);
+            nameSpan.appendChild(document.createTextNode(entry.name || 'Player'));
+            const scoreSpan = document.createElement('span');
+            scoreSpan.className = 'score';
+            scoreSpan.textContent = `${entry.score ?? 0} pts`;
+            row.appendChild(nameSpan);
+            row.appendChild(scoreSpan);
+            leaderboardList.appendChild(row);
+        });
+        if (leaderboardCard && entries.length) leaderboardCard.classList.add('active');
+    };
 
     codeForm?.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -152,6 +188,19 @@ function setupControllerButtons(prefillCode) {
         const status = document.getElementById('controller-status');
         if (joinCard) joinCard.style.display = 'none';
         if (status) status.style.display = 'none';
+    });
+
+    window.addEventListener('controller-game-end', (evt) => {
+        const leaderboard = evt.detail?.leaderboard || [];
+        const selfId = evt.detail?.selfId;
+        screen?.classList.remove('started');
+        if (pad) pad.style.display = 'none';
+        if (controls) controls.style.display = 'block';
+        setReadyWaiting();
+        if (statusCard) statusCard.style.display = 'block';
+        if (statusLine) statusLine.textContent = 'Game finished! Tap ready for the next round.';
+        setControllerReady(false);
+        renderLeaderboard(leaderboard, selfId);
     });
 }
 

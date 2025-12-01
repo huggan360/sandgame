@@ -4,7 +4,7 @@ import {
     gameObjects, resetPlayers, clearGameObjects, removeObj, flashHit,
     setEnvironment, updateCamera
 } from './scene.js';
-import { allReady, broadcastStart, getPartyCode, onReadyStateChange, syncLobbyUI } from './party.js';
+import { allReady, broadcastGameEnd, broadcastStart, getPartyCode, onReadyStateChange, syncLobbyUI } from './party.js';
 import { BrawlGame } from './minigames/brawl.js';
 import { SurvivalGame } from './minigames/survival.js';
 import { CollectGame } from './minigames/collect.js';
@@ -154,6 +154,8 @@ const GameManager = {
         ui.winnerText.innerText = text;
         ui.loserTask.innerText = penalty;
         ui.result.classList.add('active');
+        const winnerSlot = winner === 1 ? 0 : winner === 2 ? 1 : null;
+        broadcastGameEnd(winnerSlot);
     },
 
     getPenalty(loser) {

@@ -343,6 +343,16 @@
         }
 
         #ready-toggle.waiting { background: linear-gradient(120deg, #ff9a9e, #f6416c); color: white; }
+
+        #controller-leaderboard { display: none; }
+        #controller-leaderboard.active { display: block; }
+        .leaderboard-title { font-weight: 800; margin-bottom: 10px; letter-spacing: 0.02em; }
+        .leaderboard-list { display: flex; flex-direction: column; gap: 8px; }
+        .leaderboard-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-radius: 12px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.1); }
+        .leaderboard-row .badge { width: 14px; height: 14px; border-radius: 50%; margin-right: 8px; box-shadow: 0 0 10px currentColor; }
+        .leaderboard-row .name { display: flex; align-items: center; gap: 6px; font-weight: 700; }
+        .leaderboard-row .score { font-weight: 800; }
+        .leaderboard-row.mine { border-color: #31ffb0; box-shadow: 0 0 12px rgba(49,255,176,0.35); }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -395,6 +405,11 @@
                 </div>
                 <button class="pad-btn" id="fire-btn" aria-label="Fire">🔥 FIRE</button>
             </div>
+        </div>
+
+        <div class="controller-card" id="controller-leaderboard">
+            <div class="leaderboard-title">Leaderboard</div>
+            <div class="leaderboard-list" id="leaderboard-list"></div>
         </div>
     </div>
 
