@@ -4,7 +4,7 @@ import {
     gameObjects, resetPlayers, clearGameObjects, removeObj, flashHit,
     setEnvironment, updateCamera
 } from './scene.js';
-import { broadcastStart, getPartyCode, syncLobbyUI } from './party.js';
+import { allReady, broadcastStart, getPartyCode, onReadyStateChange, syncLobbyUI } from './party.js';
 import { BrawlGame } from './minigames/brawl.js';
 import { SurvivalGame } from './minigames/survival.js';
 import { CollectGame } from './minigames/collect.js';
@@ -55,6 +55,7 @@ const GameManager = {
     boundaryLimit: 8,
 
     spinWheel() {
+        this.state = 'STARTING';
         broadcastStart();
         ui.lobby.classList.remove('active');
         ui.wheel.classList.add('active');
@@ -375,13 +376,19 @@ function animate(time) {
 
 export function bootstrapGame() {
     window.GameManager = GameManager;
-    const partyLink = document.getElementById('party-link');
-    if (partyLink) {
-        const url = new URL(window.location.href);
-        url.searchParams.set('controller', getPartyCode());
-        partyLink.innerText = `Share this link: ${url.toString()}`;
+    const partyCodeLabel = document.getElementById('party-code');
+    if (partyCodeLabel) {
+        partyCodeLabel.innerText = `Party code: ${getPartyCode()}`;
     }
     syncLobbyUI();
+    onReadyStateChange((isReady) => {
+        if (isReady && GameManager.state === 'LOBBY') {
+            GameManager.spinWheel();
+        }
+    });
+    if (allReady() && GameManager.state === 'LOBBY') {
+        GameManager.spinWheel();
+    }
     setEnvironment('ISLAND');
     resetPlayers();
     animate(0);
