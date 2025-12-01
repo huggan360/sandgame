@@ -11,7 +11,7 @@ import { CollectGame } from './minigames/collect.js';
 import { VolcanoGame } from './minigames/volcano.js'; // Import new game
 import { ShellSprintGame } from './minigames/shell_sprint.js';
 import { CrabDodgeGame } from './minigames/crab_dodge.js';
-import { GeyserGauntletGame } from './minigames/geyser_gauntlet.js';
+import { TankBattleGame } from './minigames/tank_battle.js';
 import { SkySlamGame } from './minigames/sky_slam.js';
 
 const ui = {
@@ -33,7 +33,7 @@ const ui = {
     resultStatus: document.getElementById('result-ready-status')
 };
 
-const minigameOrder = ['BRAWL', 'SURVIVAL', 'COLLECT', 'VOLCANO', 'SHELL', 'CRAB', 'GEYSER', 'SKY'];
+const minigameOrder = ['BRAWL', 'SURVIVAL', 'COLLECT', 'VOLCANO', 'SHELL', 'CRAB', 'TANK', 'SKY'];
 
 const minigames = {
     'BRAWL': new BrawlGame(),
@@ -42,7 +42,7 @@ const minigames = {
     'VOLCANO': new VolcanoGame(),
     'SHELL': new ShellSprintGame(),
     'CRAB': new CrabDodgeGame(),
-    'GEYSER': new GeyserGauntletGame(),
+    'TANK': new TankBattleGame(),
     'SKY': new SkySlamGame()
 };
 
@@ -176,7 +176,7 @@ const GameManager = {
         if(this.currentGame === 'VOLCANO') return `Player ${loser} takes a SHOT (or 3 sips)`;
         if(this.currentGame === 'COLLECT' || this.currentGame === 'SHELL') return `Player ${loser} drinks diff score`;
         if(this.currentGame === 'CRAB') return `Player ${loser} drinks 1 sip`;
-        if(this.currentGame === 'GEYSER') return `Player ${loser} drinks 3 sips`;
+        if(this.currentGame === 'TANK') return `Player ${loser} drinks 3 sips`;
         if(this.currentGame === 'SKY') return `Player ${loser} finishes their drink`;
         return 'Drink up!';
     },
@@ -243,7 +243,7 @@ const GameManager = {
             if(this.currentGame === 'COLLECT' || this.currentGame === 'SHELL') {
                 const score = this.scores[slot] || 0;
                 return `Score: ${score}`;
-            } else if(this.currentGame === 'BRAWL' || this.currentGame === 'VOLCANO' || this.currentGame === 'GEYSER') {
+            } else if(this.currentGame === 'BRAWL' || this.currentGame === 'VOLCANO' || this.currentGame === 'TANK') {
                 const hp = playerMeshes[slot]?.hp ?? 0;
                 return `HP: ${hp}`;
             }
@@ -411,9 +411,9 @@ function animate(time) {
     if (GameManager.state === 'PLAYING') {
         GameManager.timer += dt;
         ui.timer.innerText = Math.max(0, Math.floor(30 - GameManager.timer)).toString();
-        // Time limit ends game (Player with most HP wins in Volcano/Brawl)
+        // Time limit ends game (Player with most HP wins in Volcano/Brawl/Tank)
         if(GameManager.timer >= 30 && GameManager.currentGame !== 'COLLECT' && GameManager.currentGame !== 'SHELL') {
-            if(GameManager.currentGame === 'BRAWL' || GameManager.currentGame === 'VOLCANO' || GameManager.currentGame === 'GEYSER') {
+            if(GameManager.currentGame === 'BRAWL' || GameManager.currentGame === 'VOLCANO' || GameManager.currentGame === 'TANK') {
                 let bestSlot = null; let bestHp = -Infinity; let tie = false;
                 GameManager.activeSlots.forEach(slot => {
                     const hp = playerMeshes[slot]?.hp ?? 0;

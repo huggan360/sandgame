@@ -271,10 +271,11 @@ export function flashHit(mesh) {
 // Controls Environment Switching
 export function setEnvironment(type) {
     // Reset positions
-    arena.position.y = 100; 
+    arena.position.y = 100;
     islandGroup.visible = false;
     volcanoGroup.visible = false;
-    
+    ocean.visible = type === 'ISLAND';
+
     // Reset Light & Fog
     ambientLight.color.setHex(0xffffff);
     ambientLight.intensity = 0.6;
@@ -302,6 +303,14 @@ export function setEnvironment(type) {
         ambientLight.intensity = 0.9;
         dirLight.color.setHex(0xffffff);
     }
+    else if (type === 'TANK') {
+        arena.position.y = 100; // Hide the circular arena
+        scene.background = new THREE.Color(0x0f182b);
+        scene.fog.color.setHex(0x14233d);
+        ambientLight.intensity = 0.75;
+        dirLight.color.setHex(0xcde3ff);
+        ocean.visible = false;
+    }
     else { // Standard Arena
         arena.position.y = 0.1;
         arena.material = mats.obsidian;
@@ -316,6 +325,14 @@ export function updateCamera(state) {
     if (state === 'LOBBY') {
         camera.position.set(0, 15, 20);
         camera.lookAt(0, 0, 0);
+        return;
+    }
+
+    const currentGame = window.GameManager?.currentGame;
+    if (currentGame === 'TANK') {
+        camera.position.set(0, 34, 0.001);
+        camera.lookAt(0, 0, 0);
+        camera.rotation.z = 0;
     } else {
         camera.position.set(0, 20, 10);
         camera.lookAt(0, 0, 0);

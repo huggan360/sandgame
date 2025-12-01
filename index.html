@@ -231,7 +231,7 @@
                 #800080 135deg 180deg,  /* Volcano (Purple/Dark) */
                 #00BCD4 180deg 225deg,  /* Shell Sprint */
                 #FFA040 225deg 270deg,  /* Crab Dodge */
-                #1DE9B6 270deg 315deg,  /* Geyser Gauntlet */
+                #57c7ff 270deg 315deg,  /* Tank Takedown */
                 #8ECBFF 315deg 360deg   /* Sky Rink */
             );
             transition: none;
@@ -307,11 +307,67 @@
             color: white;
             padding: 24px;
             box-sizing: border-box;
+            overflow: hidden;
         }
 
         #controller-screen.active { display: flex; flex-direction: column; gap: 20px; }
 
         body.controller-role #ui-layer { display: none; }
+
+        #controller-fpv {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at 50% 40%, rgba(82, 158, 255, 0.25), rgba(10, 22, 48, 0.75));
+            backdrop-filter: blur(2px);
+            opacity: 0.4;
+            transition: opacity 0.25s ease;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        #controller-fpv.active { opacity: 0.8; }
+
+        #fpv-reticle {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 140px;
+            height: 140px;
+            transform: translate(-50%, -50%) rotate(var(--reticle-rotation, 0deg));
+            border: 2px solid rgba(255,255,255,0.5);
+            border-radius: 50%;
+            box-shadow: 0 0 30px rgba(0, 172, 255, 0.25);
+        }
+
+        #fpv-reticle.flash {
+            box-shadow: 0 0 45px rgba(255, 214, 102, 0.75);
+            border-color: rgba(255, 214, 102, 0.9);
+        }
+
+        .reticle-line {
+            position: absolute;
+            background: rgba(255,255,255,0.75);
+        }
+
+        .reticle-line.horizontal { width: 80%; height: 2px; top: 50%; left: 10%; }
+        .reticle-line.vertical { height: 80%; width: 2px; left: 50%; top: 10%; }
+
+        #fpv-reload {
+            position: absolute;
+            bottom: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            color: #cde7ff;
+            text-shadow: 0 3px 10px rgba(0,0,0,0.35);
+            background: rgba(0,0,0,0.35);
+            border-radius: 999px;
+            padding: 10px 18px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        #fpv-reload.reloading { color: #ffd166; }
 
         .controller-card {
             background: rgba(255,255,255,0.06);
@@ -319,6 +375,8 @@
             border-radius: 18px;
             padding: 18px;
             box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            position: relative;
+            z-index: 1;
         }
 
         #controller-join form {
@@ -447,6 +505,14 @@
     </div>
 
         <div id="controller-screen">
+        <div id="controller-fpv">
+            <div id="fpv-reticle">
+                <span class="reticle-line horizontal"></span>
+                <span class="reticle-line vertical"></span>
+            </div>
+            <div id="fpv-reload">Ready to fire</div>
+        </div>
+
         <div class="controller-card" id="controller-status">
             <h2 style="margin:0 0 6px;">Join the Island Party</h2>
             <p id="controller-code" style="margin:0;color:#cdd9e5;font-size:0.95rem;">Enter a lobby code to get started.</p>
@@ -514,7 +580,7 @@
                 <div class="legend-item"><span style="background: #800080;"></span>VOLCANO</div>
                 <div class="legend-item"><span style="background: #00BCD4;"></span>SHELL SPRINT</div>
                 <div class="legend-item"><span style="background: #FFA040;"></span>CRAB DODGE</div>
-                <div class="legend-item"><span style="background: #1DE9B6;"></span>GEYSER GAUNTLET</div>
+                <div class="legend-item"><span style="background: #57c7ff;"></span>TANK TAKEDOWN</div>
                 <div class="legend-item"><span style="background: #8ECBFF;"></span>SKY RINK</div>
             </div>
         </div>

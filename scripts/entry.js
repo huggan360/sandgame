@@ -30,6 +30,9 @@ function setupControllerButtons(prefillCode) {
     const screen = document.getElementById('controller-screen');
     const leaderboardCard = document.getElementById('controller-leaderboard');
     const leaderboardList = document.getElementById('leaderboard-list');
+    const fpv = document.getElementById('controller-fpv');
+    const fpvReticle = document.getElementById('fpv-reticle');
+    const fpvReload = document.getElementById('fpv-reload');
     if (codeInput && prefillCode) codeInput.value = prefillCode.toUpperCase();
 
     const readyBtn = document.getElementById('ready-toggle');
@@ -116,7 +119,43 @@ function setupControllerButtons(prefillCode) {
     });
 
     const state = { x: 0, z: 0, action: false };
+    let reloadTimer = 0;
+    let reloadInterval = null;
     const sendState = () => sendControllerInput(state);
+
+    const updateReticle = () => {
+        if (!fpvReticle) return;
+        const angle = Math.atan2(state.x, -state.z) * 180 / Math.PI;
+        fpvReticle.style.setProperty('--reticle-rotation', `${isNaN(angle) ? 0 : angle}deg`);
+    };
+
+    const updateReloadUI = () => {
+        if (!fpvReload) return;
+        if (reloadTimer > 0) {
+            fpvReload.textContent = `Reloading… ${reloadTimer.toFixed(1)}s`;
+            fpvReload.classList.add('reloading');
+        } else {
+            fpvReload.textContent = 'Ready to fire';
+            fpvReload.classList.remove('reloading');
+        }
+    };
+
+    const startReload = (seconds = 2) => {
+        reloadTimer = seconds;
+        updateReloadUI();
+        if (reloadInterval) clearInterval(reloadInterval);
+        reloadInterval = setInterval(() => {
+            reloadTimer = Math.max(0, reloadTimer - 0.1);
+            updateReloadUI();
+            if (reloadTimer <= 0) {
+                clearInterval(reloadInterval);
+                reloadInterval = null;
+            }
+        }, 100);
+    };
+
+    updateReloadUI();
+    updateReticle();
 
     const resetThumb = () => {
         if (!thumb) return;
@@ -124,6 +163,7 @@ function setupControllerButtons(prefillCode) {
         state.x = 0;
         state.z = 0;
         sendState();
+        updateReticle();
     };
 
     const updateFromPointer = (clientX, clientY) => {
@@ -142,6 +182,7 @@ function setupControllerButtons(prefillCode) {
         state.x = Math.max(-1, Math.min(1, offsetX / maxRadius));
         state.z = Math.max(-1, Math.min(1, offsetY / maxRadius));
         sendState();
+        updateReticle();
     };
 
     let dragging = false;
@@ -168,6 +209,13 @@ function setupControllerButtons(prefillCode) {
     const setAction = (active) => {
         state.action = active;
         sendState();
+        if (active && reloadTimer <= 0) {
+            startReload(2);
+            if (fpvReticle) {
+                fpvReticle.classList.add('flash');
+                setTimeout(() => fpvReticle?.classList.remove('flash'), 200);
+            }
+        }
     };
 
     fireBtn?.addEventListener('pointerdown', (e) => {
@@ -188,6 +236,8 @@ function setupControllerButtons(prefillCode) {
         const status = document.getElementById('controller-status');
         if (joinCard) joinCard.style.display = 'none';
         if (status) status.style.display = 'none';
+        fpv?.classList.add('active');
+        updateReloadUI();
     });
 
     window.addEventListener('controller-game-end', (evt) => {
