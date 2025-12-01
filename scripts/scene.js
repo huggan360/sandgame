@@ -7,6 +7,7 @@ export const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window
 export const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 // Lights
@@ -17,6 +18,7 @@ dirLight.position.set(10, 30, 10);
 dirLight.castShadow = true;
 dirLight.shadow.mapSize.width = 2048;
 dirLight.shadow.mapSize.height = 2048;
+dirLight.shadow.bias = -0.0008;
 scene.add(dirLight);
 
 // Materials
@@ -42,6 +44,8 @@ export const mats = {
 
 const defaultColors = ['#00ffaa', '#ff00ff', '#ffd166', '#60a5fa'];
 let playerColors = [...defaultColors];
+const baseBoundaryLimit = 8;
+const basePlayRadius = baseBoundaryLimit + 0.5;
 
 // --- ENVIRONMENTS --- //
 
@@ -51,8 +55,9 @@ scene.add(islandGroup);
 const ocean = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), mats.water);
 ocean.rotation.x = -Math.PI/2;
 ocean.position.y = -0.5;
+ocean.receiveShadow = true;
 scene.add(ocean); // Keep ocean always, change color later
-const island = new THREE.Mesh(new THREE.CylinderGeometry(14, 14, 1, 32), mats.sand);
+const island = new THREE.Mesh(new THREE.CylinderGeometry(basePlayRadius, basePlayRadius, 1, 32), mats.sand);
 island.position.y = -0.5;
 island.receiveShadow = true;
 islandGroup.add(island);
@@ -61,18 +66,21 @@ function createPalm(x, z) {
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.2, 3, 6), mats.wood);
     trunk.position.set(x, 1, z);
     trunk.castShadow = true;
+    trunk.receiveShadow = true;
     islandGroup.add(trunk);
     const leaves = new THREE.Mesh(new THREE.ConeGeometry(1.5, 1, 5), mats.leaf);
     leaves.position.set(x, 2.5, z);
+    leaves.castShadow = true;
+    leaves.receiveShadow = true;
     islandGroup.add(leaves);
 }
 for(let i=0; i<8; i++) {
     const a = i/8 * Math.PI*2;
-    createPalm(Math.cos(a)*10, Math.sin(a)*10);
+    createPalm(Math.cos(a)*(baseBoundaryLimit - 1), Math.sin(a)*(baseBoundaryLimit - 1));
 }
 
 // 2. Arena Floor (Standard Minigames)
-export const arena = new THREE.Mesh(new THREE.CylinderGeometry(9, 9, 0.5, 32), new THREE.MeshStandardMaterial({color: 0x444444}));
+export const arena = new THREE.Mesh(new THREE.CylinderGeometry(basePlayRadius, basePlayRadius, 0.5, 32), new THREE.MeshStandardMaterial({color: 0x444444}));
 arena.position.y = 100; // Hidden by default
 arena.receiveShadow = true;
 scene.add(arena);
@@ -84,6 +92,7 @@ scene.add(volcanoGroup);
 
 const volcanoPlatform = new THREE.Mesh(new THREE.CylinderGeometry(8, 6, 2, 8), mats.obsidian);
 volcanoPlatform.position.y = -1;
+volcanoPlatform.castShadow = true;
 volcanoPlatform.receiveShadow = true;
 volcanoGroup.add(volcanoPlatform);
 const lava = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), mats.magma);
@@ -198,6 +207,8 @@ export function spawnObstacles() {
     pos.forEach(p => {
         const mesh = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 1.5), mats.crate);
         mesh.position.set(p.x, 0.75, p.z);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
         scene.add(mesh);
         gameObjects.push({ type: 'obstacle', mesh: mesh });
     });
@@ -363,6 +374,24 @@ export function setEnvironment(type) {
     }
 }
 
+export function setPlayAreaSize(limit) {
+    const effectiveLimit = limit ?? baseBoundaryLimit;
+    const scale = effectiveLimit / baseBoundaryLimit;
+    islandGroup.scale.setScalar(scale);
+    arena.scale.setScalar(scale);
+    volcanoGroup.scale.setScalar(scale);
+
+    const shadowExtent = Math.max(14, effectiveLimit + 6);
+    const cam = dirLight.shadow.camera;
+    cam.left = -shadowExtent;
+    cam.right = shadowExtent;
+    cam.top = shadowExtent;
+    cam.bottom = -shadowExtent;
+    cam.near = 2;
+    cam.far = 80;
+    cam.updateProjectionMatrix();
+}
+
 export function updateCamera(state) {
     if (state === 'LOBBY') {
         camera.position.set(0, 15, 20);
@@ -386,3 +415,5 @@ window.addEventListener('resize', () => {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+setPlayAreaSize(baseBoundaryLimit);

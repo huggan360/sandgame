@@ -19,7 +19,7 @@ export class VolcanoGame {
         this.difficultyTimer = 0;
         // Give players more HP for this one because it's chaotic
         players.forEach(p => { p.hp = 5; p.stunned = 0; p.visible = true; });
-        manager.boundaryLimit = 8;
+        manager.setBoundaryLimit(8);
     }
 
     update(dt, _input, players, gameTimer) {

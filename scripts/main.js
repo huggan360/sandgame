@@ -2,7 +2,7 @@ import { Input } from './input.js';
 import {
     scene, camera, renderer, mats, playerMeshes,
     gameObjects, resetPlayers, clearGameObjects, removeObj, flashHit,
-    setEnvironment, updateCamera, setPlayerColors, useDefaultModels
+    setEnvironment, updateCamera, setPlayerColors, useDefaultModels, setPlayAreaSize
 } from './scene.js';
 import { allReady, broadcastGameEnd, broadcastStart, getPartyCode, getPlayers, onReadyStateChange, syncLobbyUI } from './party.js';
 import { BrawlGame } from './minigames/brawl.js';
@@ -55,6 +55,17 @@ const GameManager = {
     playerCount: 2,
     activeSlots: [0,1],
     aliveSlots: [0,1],
+    recentGames: [],
+
+    setBoundaryLimit(limit) {
+        this.boundaryLimit = limit;
+        setPlayAreaSize(limit);
+    },
+
+    getPlayerName(slot) {
+        const players = getPlayers();
+        return players.find(p => p.slot === slot)?.name || `Player ${slot + 1}`;
+    },
 
     getActiveMeshes() {
         return this.activeSlots.map(idx => playerMeshes[idx]);
@@ -68,10 +79,11 @@ const GameManager = {
         this.state = 'STARTING';
         ui.lobby.classList.remove('active');
         ui.wheel.classList.add('active');
+        const chosenGame = this.chooseNextGame();
+        const chosenIndex = minigameOrder.indexOf(chosenGame);
         const slice = 360 / minigameOrder.length;
-        const randomSlice = Math.floor(Math.random() * minigameOrder.length);
         const randomOffset = Math.random() * slice;
-        const targetAngle = randomSlice * slice + randomOffset;
+        const targetAngle = chosenIndex * slice + randomOffset;
         const extraSpins = 5 + Math.random() * 2;
         const startRotation = this.currentRotation;
         const finalRotation = startRotation + extraSpins * 360 + targetAngle;
@@ -85,19 +97,24 @@ const GameManager = {
             this.currentRotation = angle;
             ui.wheelElement.style.transform = `rotate(-${angle}deg)`;
             if (t < 1) requestAnimationFrame(animateSpin);
-            else this.resolveWheel(angle % 360);
+            else this.resolveWheel(chosenGame);
         };
 
         requestAnimationFrame(animateSpin);
     },
 
-    resolveWheel(finalAngle) {
-        const slice = 360 / minigameOrder.length;
-        const index = Math.floor(finalAngle / slice) % minigameOrder.length;
-        const type = minigameOrder[index];
-        
+    resolveWheel(type) {
         ui.wheel.classList.remove('active');
         this.setupMinigame(type);
+    },
+
+    chooseNextGame() {
+        const available = minigameOrder.filter(type => !this.recentGames.includes(type));
+        const pool = available.length ? available : minigameOrder;
+        const type = pool[Math.floor(Math.random() * pool.length)];
+        this.recentGames.push(type);
+        if (this.recentGames.length > 3) this.recentGames.shift();
+        return type;
     },
 
     setupMinigame(type) {
@@ -126,7 +143,7 @@ const GameManager = {
         resetPlayers(this.playerCount);
         clearGameObjects();
         this.scores = [0,0,0,0];
-        this.boundaryLimit = 8;
+        this.setBoundaryLimit(8);
         this.updateHud();
         let count = 3;
         ui.countdown.innerText = count;
@@ -157,8 +174,10 @@ const GameManager = {
         ui.timer.style.display = 'none';
         let text = '';
         let penalty = '';
+        const players = getPlayers();
         if (typeof winnerSlot === 'number') {
-            text = `PLAYER ${winnerSlot + 1} WINS!`;
+            const winnerName = players.find(p => p.slot === winnerSlot)?.name || `Player ${winnerSlot + 1}`;
+            text = `${winnerName} WINS!`;
             const losers = this.activeSlots.filter(s => s !== winnerSlot);
             penalty = losers.length === 1 ? this.getPenalty(losers[0]) : 'Everyone else drinks 1 sip';
         } else {
@@ -173,13 +192,13 @@ const GameManager = {
     },
 
     getPenalty(loserSlot) {
-        const loser = loserSlot + 1;
-        if(this.currentGame === 'BRAWL') return `Player ${loser} drinks 1 sip`;
-        if(this.currentGame === 'VOLCANO') return `Player ${loser} takes a SHOT (or 3 sips)`;
-        if(this.currentGame === 'COLLECT' || this.currentGame === 'SHELL') return `Player ${loser} drinks diff score`;
-        if(this.currentGame === 'CRAB') return `Player ${loser} drinks 1 sip`;
-        if(this.currentGame === 'TANK') return `Player ${loser} drinks 3 sips`;
-        if(this.currentGame === 'SKY') return `Player ${loser} finishes their drink`;
+        const loserName = this.getPlayerName(loserSlot);
+        if(this.currentGame === 'BRAWL') return `${loserName} drinks 1 sip`;
+        if(this.currentGame === 'VOLCANO') return `${loserName} takes a SHOT (or 3 sips)`;
+        if(this.currentGame === 'COLLECT' || this.currentGame === 'SHELL') return `${loserName} drinks diff score`;
+        if(this.currentGame === 'CRAB') return `${loserName} drinks 1 sip`;
+        if(this.currentGame === 'TANK') return `${loserName} drinks 3 sips`;
+        if(this.currentGame === 'SKY') return `${loserName} finishes their drink`;
         return 'Drink up!';
     },
 
@@ -205,7 +224,7 @@ const GameManager = {
         clearGameObjects();
         resetPlayers(this.playerCount);
         this.state = 'LOBBY';
-        this.boundaryLimit = 8;
+        this.setBoundaryLimit(8);
         this.updateHud();
         this.spinWheel();
     },
@@ -225,7 +244,7 @@ const GameManager = {
         clearGameObjects();
         resetPlayers(this.playerCount);
         this.state = 'LOBBY';
-        this.boundaryLimit = 8;
+        this.setBoundaryLimit(8);
         this.updateHud();
         // Reset controller UI for lobby
         const { resetControllerUIForLobby } = await import('./entry.js');
@@ -259,9 +278,21 @@ const GameManager = {
     }
 };
 
-function clampPlayers(limit, meshes) {
+function clampPlayers(limit, meshes, manager, dt = 0) {
     meshes.forEach(mesh => {
+        const before = mesh.position.clone();
         mesh.position.clamp(new THREE.Vector3(-limit,0,-limit), new THREE.Vector3(limit,1,limit));
+
+        if (manager?.currentGame === 'VOLCANO') {
+            const attemptedLava = mesh.position.x !== before.x || mesh.position.z !== before.z;
+            mesh.lavaTick = Math.max(0, (mesh.lavaTick || 0) - dt);
+            if (attemptedLava && mesh.visible && (mesh.lavaTick || 0) <= 0) {
+                mesh.hp = Math.max(0, (mesh.hp ?? 0) - 1);
+                mesh.lavaTick = 1; // 1 second cooldown between lava hits
+                manager.updateHud();
+                if (mesh.hp <= 0) manager.eliminatePlayer(mesh.playerIndex);
+            }
+        }
     });
 }
 
@@ -406,7 +437,7 @@ function animate(time) {
         }
 
         if (GameManager.state === 'PLAYING' && GameManager.boundaryLimit !== null && (!useCustomMovement || GameManager.currentMinigame.allowClampAfterMovement)) {
-            clampPlayers(GameManager.boundaryLimit ?? 8, activeMeshes);
+            clampPlayers(GameManager.boundaryLimit ?? 8, activeMeshes, GameManager, dt);
         }
     }
 

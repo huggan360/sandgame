@@ -15,6 +15,7 @@ export class SkySlamGame {
 
     start(players, manager) {
         this.cooldowns = players.map(() => 0);
+        manager.setBoundaryLimit(this.radius);
         manager.boundaryLimit = null; // custom edge handling
         const radius = 3.5;
         players.forEach((mesh, idx) => {

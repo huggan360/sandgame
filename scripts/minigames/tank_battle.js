@@ -35,7 +35,7 @@ export class TankBattleGame {
 
     start(players, manager) {
         this.cooldowns = players.map(() => 0);
-        manager.boundaryLimit = 9;
+        manager.setBoundaryLimit(9);
         useTankModels();
         players.forEach((p, idx) => {
             p.hp = 3;
