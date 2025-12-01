@@ -109,7 +109,8 @@ function attachControllerConn(conn, reject) {
         }
         if (data.type === 'start') {
             controllerState.started = true;
-            startListeners.forEach(cb => cb());
+            controllerState.game = data.game;
+            startListeners.forEach(cb => cb({ game: data.game }));
         }
     });
     conn.on('close', () => reject?.(new Error('Connection closed')));
@@ -121,6 +122,7 @@ function controllerConnect(code) {
     controllerState.started = false;
     controllerState.ready = false;
     controllerState.slot = null;
+    controllerState.game = null;
     controllerState.conn = null;
     updateControllerHeader();
     return new Promise((resolve, reject) => {
@@ -140,11 +142,14 @@ async function controllerPeer(code, name) {
     return controllerState.conn;
 }
 
-export function broadcastStart() {
-    connections.forEach(c => c.open && c.send({ type: 'start' }));
+export function broadcastStart(gameType) {
+    connections.forEach(c => c.open && c.send({ type: 'start', game: gameType }));
+    startListeners.forEach(cb => cb({ game: gameType }));
 }
 
 function notifyControllerOfGameEnd(leaderboard) {
+    controllerState.started = false;
+    controllerState.game = null;
     const event = new CustomEvent('controller-game-end', { detail: { leaderboard, selfId: controllerState.slot?.id || controllerState.conn?.peer } });
     window.dispatchEvent(event);
 }
@@ -229,8 +234,13 @@ const controllerState = {
     ready: false,
     started: false,
     conn: null,
-    slot: null
+    slot: null,
+    game: null
 };
+
+export function getControllerSlot() {
+    return controllerState.slot;
+}
 
 function updateControllerHeader() {
     const header = document.getElementById('controller-code');
