@@ -10,6 +10,8 @@ import { CollectGame } from './minigames/collect.js';
 import { VolcanoGame } from './minigames/volcano.js'; // Import new game
 import { ShellSprintGame } from './minigames/shell_sprint.js';
 import { CrabDodgeGame } from './minigames/crab_dodge.js';
+import { GeyserGauntletGame } from './minigames/geyser_gauntlet.js';
+import { SkySlamGame } from './minigames/sky_slam.js';
 
 const ui = {
     lobby: document.getElementById('lobby-card'),
@@ -28,7 +30,7 @@ const ui = {
     p2Hud: document.querySelector('.p2-hud')
 };
 
-const minigameOrder = ['BRAWL', 'SURVIVAL', 'COLLECT', 'VOLCANO', 'SHELL', 'CRAB'];
+const minigameOrder = ['BRAWL', 'SURVIVAL', 'COLLECT', 'VOLCANO', 'SHELL', 'CRAB', 'GEYSER', 'SKY'];
 
 const minigames = {
     'BRAWL': new BrawlGame(),
@@ -36,7 +38,9 @@ const minigames = {
     'COLLECT': new CollectGame(),
     'VOLCANO': new VolcanoGame(),
     'SHELL': new ShellSprintGame(),
-    'CRAB': new CrabDodgeGame()
+    'CRAB': new CrabDodgeGame(),
+    'GEYSER': new GeyserGauntletGame(),
+    'SKY': new SkySlamGame()
 };
 
 const GameManager = {
@@ -47,6 +51,7 @@ const GameManager = {
     p2Score: 0,
     timer: 0,
     currentRotation: 0,
+    boundaryLimit: 8,
 
     spinWheel() {
         ui.lobby.classList.remove('active');
@@ -92,10 +97,10 @@ const GameManager = {
         ui.title.innerText = info.title;
         ui.desc.innerText = info.description;
         ui.penalty.innerText = info.penalty;
-        
+
         // Handle Scene Switching
-        if(type === 'VOLCANO') setEnvironment('VOLCANO');
-        else setEnvironment('ISLAND');
+        const env = info.environment || (type === 'VOLCANO' ? 'VOLCANO' : 'ISLAND');
+        setEnvironment(env);
 
         resetPlayers();
         clearGameObjects();
@@ -103,6 +108,7 @@ const GameManager = {
         p2Mesh.position.set(5, 0.1, 0);
         this.p1Score = 0;
         this.p2Score = 0;
+        this.boundaryLimit = 8;
         this.updateHud();
         let count = 3;
         ui.countdown.innerText = count;
@@ -153,6 +159,8 @@ const GameManager = {
         if(this.currentGame === 'VOLCANO') return `Player ${loser} takes a SHOT (or 3 sips)`;
         if(this.currentGame === 'COLLECT' || this.currentGame === 'SHELL') return `Player ${loser} drinks diff score`;
         if(this.currentGame === 'CRAB') return `Player ${loser} drinks 1 sip`;
+        if(this.currentGame === 'GEYSER') return `Player ${loser} drinks 3 sips`;
+        if(this.currentGame === 'SKY') return `Player ${loser} finishes their drink`;
         return 'Drink up!';
     },
 
@@ -163,6 +171,7 @@ const GameManager = {
         clearGameObjects();
         resetPlayers();
         this.state = 'LOBBY';
+        this.boundaryLimit = 8;
         this.updateHud();
     },
 
@@ -170,7 +179,7 @@ const GameManager = {
         if(this.currentGame === 'COLLECT' || this.currentGame === 'SHELL') {
             ui.p1Hud.innerText = `P1 Score: ${this.p1Score}`;
             ui.p2Hud.innerText = `P2 Score: ${this.p2Score}`;
-        } else if(this.currentGame === 'BRAWL' || this.currentGame === 'VOLCANO') {
+        } else if(this.currentGame === 'BRAWL' || this.currentGame === 'VOLCANO' || this.currentGame === 'GEYSER') {
             ui.p1Hud.innerText = `P1 HP: ${p1Mesh.hp || 0}`;
             ui.p2Hud.innerText = `P2 HP: ${p2Mesh.hp || 0}`;
         } else {
@@ -302,6 +311,7 @@ function animate(time) {
     const p1In = Input.getP1Axis();
     const p2In = Input.getP2Axis();
     const speed = 8 * dt;
+    const useCustomMovement = GameManager.state === 'PLAYING' && GameManager.currentMinigame && typeof GameManager.currentMinigame.handleMovement === 'function';
 
     if (GameManager.state === 'LOBBY' || GameManager.state === 'PLAYING') {
         if (p1In.x !== 0 || p1In.z !== 0) {
@@ -310,27 +320,34 @@ function animate(time) {
         if (p2In.x !== 0 || p2In.z !== 0) {
             p2Mesh.aimDir = new THREE.Vector3(p2In.x, 0, p2In.z).normalize();
         }
-        // Player 1 Movement (Blocked if stunned)
-        if ((!p1Mesh.stunned || p1Mesh.stunned <= 0) && (p1In.x !== 0 || p1In.z !== 0)) {
-            const oldPos = p1Mesh.position.clone();
-            p1Mesh.position.x += p1In.x * speed;
-            p1Mesh.position.z += p1In.z * speed;
-            p1Mesh.lookAt(p1Mesh.position.x + p1In.x, p1Mesh.position.y, p1Mesh.position.z + p1In.z);
-            if (GameManager.currentGame === 'BRAWL' && playerCollidesWithObstacle(p1Mesh)) {
-                p1Mesh.position.copy(oldPos);
+        if (!useCustomMovement) {
+            // Player 1 Movement (Blocked if stunned)
+            if ((!p1Mesh.stunned || p1Mesh.stunned <= 0) && (p1In.x !== 0 || p1In.z !== 0)) {
+                const oldPos = p1Mesh.position.clone();
+                p1Mesh.position.x += p1In.x * speed;
+                p1Mesh.position.z += p1In.z * speed;
+                p1Mesh.lookAt(p1Mesh.position.x + p1In.x, p1Mesh.position.y, p1Mesh.position.z + p1In.z);
+                if (GameManager.currentGame === 'BRAWL' && playerCollidesWithObstacle(p1Mesh)) {
+                    p1Mesh.position.copy(oldPos);
+                }
             }
-        }
-        // Player 2 Movement (Blocked if stunned)
-        if ((!p2Mesh.stunned || p2Mesh.stunned <= 0) && (p2In.x !== 0 || p2In.z !== 0)) {
-            const oldPos = p2Mesh.position.clone();
-            p2Mesh.position.x += p2In.x * speed;
-            p2Mesh.position.z += p2In.z * speed;
-            p2Mesh.lookAt(p2Mesh.position.x + p2In.x, p2Mesh.position.y, p2Mesh.position.z + p2In.z);
-            if (GameManager.currentGame === 'BRAWL' && playerCollidesWithObstacle(p2Mesh)) {
-                p2Mesh.position.copy(oldPos);
+            // Player 2 Movement (Blocked if stunned)
+            if ((!p2Mesh.stunned || p2Mesh.stunned <= 0) && (p2In.x !== 0 || p2In.z !== 0)) {
+                const oldPos = p2Mesh.position.clone();
+                p2Mesh.position.x += p2In.x * speed;
+                p2Mesh.position.z += p2In.z * speed;
+                p2Mesh.lookAt(p2Mesh.position.x + p2In.x, p2Mesh.position.y, p2Mesh.position.z + p2In.z);
+                if (GameManager.currentGame === 'BRAWL' && playerCollidesWithObstacle(p2Mesh)) {
+                    p2Mesh.position.copy(oldPos);
+                }
             }
+        } else if (GameManager.state === 'PLAYING') {
+            GameManager.currentMinigame.handleMovement(dt, { p1: p1In, p2: p2In }, p1Mesh, p2Mesh);
         }
-        if (GameManager.state === 'PLAYING') clampPlayers(8);
+
+        if (GameManager.state === 'PLAYING' && GameManager.boundaryLimit !== null && (!useCustomMovement || GameManager.currentMinigame.allowClampAfterMovement)) {
+            clampPlayers(GameManager.boundaryLimit ?? 8);
+        }
     }
 
     if (GameManager.state === 'PLAYING') {
@@ -338,7 +355,7 @@ function animate(time) {
         ui.timer.innerText = Math.max(0, Math.floor(30 - GameManager.timer)).toString();
         // Time limit ends game (Player with most HP wins in Volcano/Brawl)
         if(GameManager.timer >= 30 && GameManager.currentGame !== 'COLLECT' && GameManager.currentGame !== 'SHELL') {
-            if(GameManager.currentGame === 'BRAWL' || GameManager.currentGame === 'VOLCANO') {
+            if(GameManager.currentGame === 'BRAWL' || GameManager.currentGame === 'VOLCANO' || GameManager.currentGame === 'GEYSER') {
                 if(p1Mesh.hp > p2Mesh.hp) GameManager.endGame(1);
                 else if(p2Mesh.hp > p1Mesh.hp) GameManager.endGame(2);
                 else GameManager.endGame(0);
