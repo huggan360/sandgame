@@ -147,6 +147,8 @@ const GameManager = {
         this.scores = [0,0,0,0];
         this.setBoundaryLimit(8);
         this.updateHud();
+        // Signal controllers as soon as the countdown begins so controls are visible before play starts
+        broadcastStart(this.currentGame);
         let count = 3;
         ui.countdown.innerText = count;
         const int = setInterval(() => {
@@ -166,7 +168,6 @@ const GameManager = {
         ui.timer.style.display = 'block';
         this.state = 'PLAYING';
         this.timer = 0;
-        broadcastStart(this.currentGame);
         this.currentMinigame.start(this.getActiveMeshes(), this);
         this.updateHud();
     },

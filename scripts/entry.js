@@ -246,7 +246,7 @@ function setupControllerButtons(prefillCode) {
         const screen = document.getElementById('controller-screen');
         if (screen) screen.classList.add('started');
         if (pad) pad.style.display = 'flex';
-        if (statusLine) statusLine.textContent = 'Game started! Use the controller to play.';
+        if (statusLine) statusLine.textContent = 'Countdown started! Get ready to play.';
         // Hide join card and status, keep only header with name/party code
         const joinCard = document.getElementById('controller-join');
         const status = document.getElementById('controller-status');
