@@ -474,8 +474,9 @@ export function updateCamera(state) {
         camera.lookAt(0, 6, -8);
         camera.rotation.z = 0;
     } else if (currentGame === 'RUNNER') {
-        camera.position.set(0, 10, -15);
-        camera.lookAt(0, 4, 12);
+        // Pull back and flip viewpoint so the boardwalk isn't upside down and you can see farther ahead
+        camera.position.set(0, 16, 32);
+        camera.lookAt(0, 4, -6);
         camera.rotation.z = 0;
     } else if (currentGame === 'TANK') {
         camera.position.set(0, 34, 0.001);

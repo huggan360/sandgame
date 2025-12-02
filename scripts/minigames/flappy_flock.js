@@ -131,9 +131,11 @@ export class FlappyFlockGame {
 
             mesh.velY += this.gravity * dt;
             mesh.position.y += mesh.velY * dt;
-            mesh.position.y = Math.max(0.5, mesh.position.y);
-
-            if (mesh.position.y <= 0.5 || mesh.position.y > 12) {
+            if (mesh.position.y <= 0.5) {
+                // Hug the ground instead of dying; stick to floor and clear downward momentum
+                mesh.position.y = 0.5;
+                mesh.velY = 0;
+            } else if (mesh.position.y > 12) {
                 this.handleCrash(mesh, manager);
             }
         });

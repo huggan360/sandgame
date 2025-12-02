@@ -4,7 +4,7 @@ import {
     gameObjects, resetPlayers, clearGameObjects, removeObj, flashHit,
     setEnvironment, updateCamera, setPlayerColors, useDefaultModels, setPlayAreaSize
 } from './scene.js';
-import { allReady, broadcastGameEnd, broadcastStart, getPartyCode, getPlayers, onReadyStateChange, syncLobbyUI } from './party.js';
+import { allReady, broadcastGameEnd, broadcastStart, getPartyCode, getPartyMode, getPlayers, onReadyStateChange, requestLeaderGameChoice, syncLobbyUI } from './party.js';
 import { BrawlGame } from './minigames/brawl.js';
 import { CollectGame } from './minigames/collect.js';
 import { VolcanoGame } from './minigames/volcano.js'; // Import new game
@@ -20,6 +20,7 @@ const ui = {
     intro: document.getElementById('intro-card'),
     result: document.getElementById('result-card'),
     wheelElement: document.getElementById('wheel'),
+    wheelLabels: document.getElementById('wheel-labels'),
     timer: document.getElementById('game-timer'),
     title: document.getElementById('game-title'),
     desc: document.getElementById('game-desc'),
@@ -30,10 +31,31 @@ const ui = {
     leaderboard: document.getElementById('host-leaderboard-list'),
     codeChip: document.getElementById('party-chip'),
     codeChipText: document.getElementById('party-chip-text'),
-    resultStatus: document.getElementById('result-ready-status')
+    resultStatus: document.getElementById('result-ready-status'),
+    partyStatus: document.getElementById('party-status')
 };
 
 const minigameOrder = ['BRAWL', 'COLLECT', 'VOLCANO', 'CRAB', 'TANK', 'SKY', 'FLAPPY', 'RUNNER'];
+const minigameColors = {
+    BRAWL: '#FF512F',
+    COLLECT: '#FFD700',
+    VOLCANO: '#800080',
+    CRAB: '#FFA040',
+    TANK: '#57c7ff',
+    SKY: '#8ECBFF',
+    FLAPPY: '#00BCD4',
+    RUNNER: '#4CAF50'
+};
+const minigameLabels = {
+    BRAWL: 'Brawl',
+    COLLECT: 'Collect',
+    VOLCANO: 'Volcano',
+    CRAB: 'Crab Dodge',
+    TANK: 'Tank Takedown',
+    SKY: 'Sky Rink',
+    FLAPPY: 'Flappy Flock',
+    RUNNER: 'Boardwalk Dash'
+};
 
 const minigames = {
     'BRAWL': new BrawlGame(),
@@ -58,6 +80,7 @@ const GameManager = {
     activeSlots: [0,1],
     aliveSlots: [0,1],
     recentGames: [],
+    starting: false,
 
     setBoundaryLimit(limit) {
         this.boundaryLimit = limit;
@@ -77,13 +100,45 @@ const GameManager = {
         return this.activeSlots.map(idx => Input.getAxisForSlot(idx));
     },
 
+    getAvailableGames() {
+        const available = minigameOrder.filter(type => !this.recentGames.includes(type));
+        return available.length ? available : minigameOrder;
+    },
+
+    renderWheel(games) {
+        if (!ui.wheelElement) return;
+        const slice = 360 / games.length;
+        const segments = games.map((game, idx) => {
+            const start = idx * slice;
+            const end = (idx + 1) * slice;
+            const color = minigameColors[game] || '#ffffff';
+            return `${color} ${start}deg ${end}deg`;
+        }).join(', ');
+        ui.wheelElement.style.background = `conic-gradient(${segments})`;
+
+        if (ui.wheelLabels) {
+            ui.wheelLabels.innerHTML = '';
+            const radius = 120;
+            games.forEach((game, idx) => {
+                const angle = idx * slice + slice / 2;
+                const label = document.createElement('div');
+                label.className = 'wheel-label';
+                label.textContent = minigameLabels[game] || game;
+                label.style.transform = `rotate(${angle}deg) translate(0, -${radius}px) rotate(${-angle}deg)`;
+                ui.wheelLabels.appendChild(label);
+            });
+        }
+    },
+
     spinWheel() {
         this.state = 'STARTING';
         ui.lobby.classList.remove('active');
         ui.wheel.classList.add('active');
-        const chosenGame = this.chooseNextGame();
-        const chosenIndex = minigameOrder.indexOf(chosenGame);
-        const slice = 360 / minigameOrder.length;
+        const availableGames = this.getAvailableGames();
+        const chosenGame = this.chooseNextGame(availableGames);
+        const chosenIndex = availableGames.indexOf(chosenGame);
+        const slice = 360 / availableGames.length;
+        this.renderWheel(availableGames);
         const randomOffset = Math.random() * slice;
         const targetAngle = chosenIndex * slice + randomOffset;
         const extraSpins = 5 + Math.random() * 2;
@@ -110,10 +165,9 @@ const GameManager = {
         this.setupMinigame(type);
     },
 
-    chooseNextGame() {
-        const available = minigameOrder.filter(type => !this.recentGames.includes(type));
-        const pool = available.length ? available : minigameOrder;
-        const type = pool[Math.floor(Math.random() * pool.length)];
+    chooseNextGame(pool) {
+        const selection = Array.isArray(pool) && pool.length ? pool : this.getAvailableGames();
+        const type = selection[Math.floor(Math.random() * selection.length)];
         this.recentGames.push(type);
         if (this.recentGames.length > 3) this.recentGames.shift();
         return type;
@@ -222,6 +276,34 @@ const GameManager = {
         }
     },
 
+    async handleAllReady() {
+        if ((this.state === 'LOBBY' || this.state === 'RESULT') && allReady()) {
+            if (this.state === 'RESULT') {
+                this.prepareNextRound();
+            }
+            await this.triggerNextGame();
+        }
+    },
+
+    async triggerNextGame() {
+        if (this.starting || this.state !== 'LOBBY') return;
+        this.starting = true;
+        const mode = getPartyMode();
+        if (mode === 'CHOOSE') {
+            if (ui.partyStatus) ui.partyStatus.innerText = 'Leader choosing next game…';
+            const choice = await requestLeaderGameChoice(minigameOrder);
+            if (choice) {
+                ui.lobby.classList.remove('active');
+                this.setupMinigame(choice);
+            } else {
+                this.spinWheel();
+            }
+        } else {
+            this.spinWheel();
+        }
+        this.starting = false;
+    },
+
     prepareNextRound() {
         ui.result.classList.remove('active');
         ui.lobby.classList.add('active');
@@ -231,15 +313,8 @@ const GameManager = {
         this.state = 'LOBBY';
         this.setBoundaryLimit(8);
         this.updateHud();
-        this.spinWheel();
-    },
-
-    handleAllReady() {
-        if (this.state === 'LOBBY' && allReady()) {
-            this.spinWheel();
-        } else if (this.state === 'RESULT' && allReady()) {
-            this.prepareNextRound();
-        }
+        if (ui.partyStatus) ui.partyStatus.innerText = 'Waiting for everyone to ready up…';
+        this.starting = false;
     },
 
     async returnToLobby() {
@@ -489,11 +564,7 @@ function animate(time) {
 
 export function bootstrapGame() {
     window.GameManager = GameManager;
-    const partyCodeLabel = document.getElementById('party-code');
     const code = getPartyCode();
-    if (partyCodeLabel) {
-        partyCodeLabel.innerText = `Party code: ${code}`;
-    }
     if (ui.codeChipText) {
         ui.codeChipText.innerText = `Code: ${code}`;
         ui.codeChip?.classList.add('visible');

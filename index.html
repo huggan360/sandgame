@@ -156,6 +156,39 @@
         h1 { margin: 0; font-size: 3rem; color: #FFD700; -webkit-text-stroke: 1px #B8860B; }
         h2 { margin: 10px 0; font-size: 1.5rem; color: white; }
 
+        #lobby-card {
+            top: 58%;
+            background: rgba(9, 18, 36, 0.9);
+            border: 1px solid rgba(255,255,255,0.14);
+            box-shadow: 0 28px 60px rgba(0,0,0,0.5);
+            transform: translate(-50%, -50%) translateY(14px);
+            padding: 26px 30px;
+        }
+
+        .lobby-meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 6px 0 10px; }
+        .mode-pill {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            box-shadow: 0 12px 24px rgba(0,0,0,0.25);
+        }
+        .mode-pill .chip-dot { width: 12px; height: 12px; border-radius: 50%; background: #31ffb0; box-shadow: 0 0 8px #31ffb0; }
+        .mode-label { font-weight: 800; letter-spacing: 0.05em; }
+        .mode-blurb { color: #cdd9e5; font-size: 0.9rem; }
+        .leader-label {
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: rgba(255,214,102,0.1);
+            color: #ffd166;
+            border: 1px solid rgba(255,214,102,0.4);
+            font-weight: 700;
+            letter-spacing: 0.03em;
+        }
+
         /* Dialog Cards */
         .card {
             position: absolute;
@@ -223,19 +256,25 @@
         
         #wheel {
             width: 300px; height: 300px; border-radius: 50%; border: 8px solid white;
-            /* 8 Slice Conic Gradient */
-            background: conic-gradient(
-                #FF512F 0deg 45deg,     /* Brawl */
-                #FFD700 45deg 90deg,    /* Collect */
-                #800080 90deg 135deg,   /* Volcano */
-                #FFA040 135deg 180deg,  /* Crab Dodge */
-                #57c7ff 180deg 225deg,  /* Tank Takedown */
-                #8ECBFF 225deg 270deg,  /* Sky Rink */
-                #00BCD4 270deg 315deg,  /* Flappy Flock */
-                #4CAF50 315deg 360deg   /* Boardwalk Dash */
-            );
             transition: none;
             box-shadow: 0 0 30px rgba(0,0,0,0.5);
+        }
+        #wheel-labels {
+            position: absolute;
+            inset: 0;
+            display: block;
+            pointer-events: none;
+        }
+        .wheel-label {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform-origin: center center;
+            color: white;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+            white-space: nowrap;
         }
         
         #pointer {
@@ -248,11 +287,6 @@
             z-index: 25;
             filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
         }
-
-        .wheel-legend {
-            display: flex; gap: 20px; color: white; margin-top: 20px; font-weight: bold; text-shadow: 1px 1px 2px black;
-        }
-        .legend-item span { display: inline-block; width: 15px; height: 15px; margin-right: 5px; border: 2px solid white; }
 
         /* Party Lobby */
         #party-panel {
@@ -284,16 +318,15 @@
         }
 
         .pill.ready .dot { background: #31ffb0; }
-
-        #party-code {
-            background: rgba(0,0,0,0.4);
-            border-radius: 14px;
-            padding: 12px;
-            color: #fefefe;
-            border: 1px dashed rgba(255,255,255,0.25);
-            margin-top: 10px;
-            font-size: 1.1rem;
-            letter-spacing: 0.2rem;
+        .leader-chip {
+            margin-left: 8px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.1);
+            color: #ffd166;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
         }
 
         #start-btn[disabled] { opacity: 0.6; cursor: not-allowed; }
@@ -490,6 +523,61 @@
 
         #ready-toggle.waiting { background: linear-gradient(120deg, #ff9a9e, #f6416c); color: white; }
 
+        .mode-panel {
+            margin-top: 10px;
+            padding: 12px;
+            border-radius: 14px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+        }
+        .mode-options { display: flex; gap: 10px; margin-top: 8px; }
+        .mode-btn {
+            flex: 1;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.08);
+            color: white;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+        .mode-btn.active {
+            background: linear-gradient(120deg, #31ffb0, #0ea16b);
+            color: #0b251c;
+            box-shadow: 0 12px 24px rgba(14,161,107,0.35);
+        }
+        .mode-btn:disabled { opacity: 0.6; }
+        #mode-status { color: #cdd9e5; font-size: 0.95rem; margin-top: 6px; }
+
+        #game-choice-panel {
+            margin-top: 12px;
+            padding: 12px;
+            border-radius: 14px;
+            background: rgba(0,0,0,0.35);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        #game-choice-panel.hidden { display: none; }
+        #game-choice-panel.not-leader { opacity: 0.7; }
+        .choice-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .choice-btn {
+            padding: 12px;
+            border-radius: 12px;
+            border: none;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+        }
+        .choice-btn:hover:not(:disabled) { background: rgba(255,255,255,0.16); }
+        .choice-btn:disabled { opacity: 0.6; }
+        #choice-hint { color: #cdd9e5; font-size: 0.9rem; margin-top: 6px; }
+
         #controller-leaderboard { display: none; }
         #controller-leaderboard.active { display: block; }
         .leaderboard-title { font-weight: 800; margin-bottom: 10px; letter-spacing: 0.02em; }
@@ -559,6 +647,23 @@
                 <div id="controller-layout-help">Use the joystick to move. Action buttons change per game.</div>
             </div>
             <button id="ready-toggle" class="waiting" disabled>Tap Ready</button>
+            <div class="mode-panel">
+                <div class="layout-header">
+                    <div style="font-weight:800; letter-spacing:0.05em;">Game Mode</div>
+                    <div id="mode-status">Leader decides how rounds start.</div>
+                </div>
+                <div class="mode-options">
+                    <button type="button" class="mode-btn active" data-mode-choice="RANDOM">Random</button>
+                    <button type="button" class="mode-btn" data-mode-choice="CHOOSE">Choose</button>
+                </div>
+            </div>
+            <div id="game-choice-panel" class="hidden">
+                <div class="layout-header">
+                    <div style="font-weight:800; letter-spacing:0.05em;">Pick the next minigame</div>
+                    <div id="choice-hint">Leader is choosing…</div>
+                </div>
+                <div id="game-choice-list" class="choice-grid"></div>
+            </div>
             <div id="controller-pad">
                 <div id="joystick">
                     <div class="joystick-ring"></div>
@@ -591,25 +696,25 @@
             <div id="wheel-container">
                 <div id="pointer"></div>
                 <div id="wheel"></div>
-            </div>
-            <div class="wheel-legend">
-                <div class="legend-item"><span style="background: #FF512F;"></span>BRAWL</div>
-                <div class="legend-item"><span style="background: #FFD700;"></span>COLLECT</div>
-                <div class="legend-item"><span style="background: #800080;"></span>VOLCANO</div>
-                <div class="legend-item"><span style="background: #FFA040;"></span>CRAB DODGE</div>
-                <div class="legend-item"><span style="background: #57c7ff;"></span>TANK TAKEDOWN</div>
-                <div class="legend-item"><span style="background: #8ECBFF;"></span>SKY RINK</div>
-                <div class="legend-item"><span style="background: #00BCD4;"></span>FLAPPY FLOCK</div>
-                <div class="legend-item"><span style="background: #4CAF50;"></span>BOARDWALK DASH</div>
+                <div id="wheel-labels"></div>
             </div>
         </div>
 
         <!-- Lobby UI -->
         <div id="lobby-card" class="card">
             <h1>TROPICAL LOBBY</h1>
+            <div class="lobby-meta">
+                <div class="mode-pill">
+                    <div class="chip-dot"></div>
+                    <div>
+                        <div class="mode-label" id="mode-label">Random</div>
+                        <div class="mode-blurb" id="mode-blurb">We’ll spin up a random mini game each round.</div>
+                    </div>
+                </div>
+                <div class="leader-label" id="leader-name">Waiting for a leader…</div>
+            </div>
             <p style="color: #aaa;" id="party-status">Waiting for phones to join…</p>
             <div id="party-panel"></div>
-            <div id="party-code"></div>
         </div>
 
         <!-- Result UI -->

@@ -10,9 +10,15 @@ let inputState = {};
 let listeners = [];
 let startListeners = [];
 let readinessListeners = [];
+let partyStateListeners = [];
+let chooseListeners = [];
 let lastReadyState = false;
 let slotResolvers = [];
 const availableColors = ['#00ffaa', '#ff00ff', '#ffd166', '#60a5fa', '#ff7f50', '#8ce99a'];
+let leaderId = null;
+let gameMode = 'RANDOM';
+let choiceResolver = null;
+let choiceTimeout = null;
 
 function randomCode() {
     return Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -43,6 +49,14 @@ export function onReadyStateChange(cb) {
     readinessListeners.push(cb);
 }
 
+export function onPartyStateChange(cb) {
+    partyStateListeners.push(cb);
+}
+
+export function onChooseGameRequest(cb) {
+    chooseListeners.push(cb);
+}
+
 export function getPlayers() {
     return playerSlots.slice();
 }
@@ -69,10 +83,65 @@ function assignSlot(id, name, preferredColor) {
     if (slotIndex >= 4) return null;
     const color = pickColor(preferredColor);
     if (!color) return null;
-    const slot = { id, name: name || `Player ${slotIndex + 1}`, ready: false, color, slot: slotIndex, score: 0 };
+    const slot = { id, name: name || `Player ${slotIndex + 1}`, ready: false, color, slot: slotIndex, score: 0, leader: false, mode: gameMode };
+    if (!leaderId) {
+        leaderId = id;
+        slot.leader = true;
+    }
     playerSlots.push(slot);
     notify();
+    broadcastPartyState();
     return slot;
+}
+
+function ensureLeader() {
+    if (leaderId && playerSlots.some(p => p.id === leaderId)) return;
+    leaderId = playerSlots[0]?.id || null;
+    playerSlots.forEach((p, idx) => p.leader = leaderId && p.id === leaderId ? true : false);
+    broadcastPartyState();
+}
+
+function broadcastPartyState() {
+    const payload = { type: 'party-state', mode: gameMode, leaderId };
+    connections.forEach(c => c.open && c.send(payload));
+    partyStateListeners.forEach(cb => cb({ mode: gameMode, leaderId }));
+}
+
+export function getPartyMode() {
+    return gameMode;
+}
+
+export function setPartyMode(mode, requesterId) {
+    if (requesterId && requesterId !== leaderId) return;
+    const next = mode === 'CHOOSE' ? 'CHOOSE' : 'RANDOM';
+    if (next === gameMode) return;
+    gameMode = next;
+    playerSlots.forEach(p => p.mode = gameMode);
+    broadcastPartyState();
+    notify();
+}
+
+function clearChoiceResolver() {
+    if (choiceTimeout) clearTimeout(choiceTimeout);
+    choiceTimeout = null;
+    choiceResolver = null;
+}
+
+export function requestLeaderGameChoice(games) {
+    if (gameMode !== 'CHOOSE') return Promise.resolve(null);
+    return new Promise((resolve) => {
+        const leaderConn = connections.find(c => c.peer === leaderId);
+        if (!leaderConn?.open) {
+            resolve(null);
+            return;
+        }
+        choiceResolver = resolve;
+        choiceTimeout = setTimeout(() => {
+            clearChoiceResolver();
+            resolve(null);
+        }, 15000);
+        leaderConn.send({ type: 'choose-game', games });
+    });
 }
 
 function handleControllerMessage(conn, msg) {
@@ -84,6 +153,12 @@ function handleControllerMessage(conn, msg) {
     } else if (msg.type === 'ready') {
         const slot = playerSlots.find(p => p.id === conn.peer);
         if (slot) { slot.ready = msg.ready; notify(); }
+    } else if (msg.type === 'set-mode') {
+        if (conn.peer === leaderId) setPartyMode(msg.mode, conn.peer);
+    } else if (msg.type === 'choose-game-choice') {
+        if (conn.peer !== leaderId || !choiceResolver) return;
+        clearChoiceResolver();
+        choiceResolver(msg.game);
     }
 }
 
@@ -100,6 +175,8 @@ function hostPeer() {
         conn.on('close', () => {
             playerSlots = playerSlots.filter(p => p.id !== conn.peer);
             delete inputState[conn.peer];
+            ensureLeader();
+            clearChoiceResolver();
             notify();
         });
     });
@@ -120,6 +197,12 @@ function attachControllerConn(conn, reject) {
             controllerState.started = true;
             controllerState.game = data.game;
             startListeners.forEach(cb => cb({ game: data.game }));
+        }
+        if (data.type === 'party-state') {
+            partyStateListeners.forEach(cb => cb({ mode: data.mode, leaderId: data.leaderId }));
+        }
+        if (data.type === 'choose-game') {
+            chooseListeners.forEach(cb => cb({ games: data.games }));
         }
     });
     conn.on('close', () => reject?.(new Error('Connection closed')));
@@ -174,10 +257,28 @@ export function broadcastGameEnd(winnerSlot) {
         name: p.name,
         score: p.score || 0,
         color: p.color,
-        slot: p.slot
+        slot: p.slot,
+        leader: p.leader
     }));
     connections.forEach(c => c.open && c.send({ type: 'game-end', leaderboard }));
 }
+
+export function sendPartyModeChange(mode) {
+    if (role !== 'controller') return;
+    if (controllerState.conn?.open) {
+        controllerState.conn.send({ type: 'set-mode', mode });
+    }
+}
+
+export function sendChosenGame(game) {
+    if (role !== 'controller') return;
+    if (controllerState.conn?.open) {
+        controllerState.conn.send({ type: 'choose-game-choice', game });
+    }
+}
+
+// Explicit export map to ensure availability for module consumers
+export { onChooseGameRequest };
 
 export function setControllerReady(ready) {
     if (role !== 'controller') return;
@@ -270,33 +371,42 @@ export function mountControllerUI() {
 
 export function syncLobbyUI() {
     const partyPanel = document.getElementById('party-panel');
-    const partyCodeLabel = document.getElementById('party-code');
     const status = document.getElementById('party-status');
     const sidebar = document.getElementById('host-leaderboard-list');
     const resultStatus = document.getElementById('result-ready-status');
     const codeChip = document.getElementById('party-chip');
     const codeChipText = document.getElementById('party-chip-text');
+    const modeLabel = document.getElementById('mode-label');
+    const modeBlurb = document.getElementById('mode-blurb');
+    const leaderName = document.getElementById('leader-name');
     const players = getPlayers();
     if (!partyPanel) return;
     partyPanel.innerHTML = '';
     players.forEach(p => {
         const div = document.createElement('div');
         div.className = `pill ${p.ready ? 'ready' : ''}`;
-        div.innerHTML = `<span class="dot" style="background:${p.color}"></span>${p.name}`;
+        const leaderTag = p.leader ? '<span class="leader-chip">★ Leader</span>' : '';
+        div.innerHTML = `<span class="dot" style="background:${p.color}"></span>${p.name}${leaderTag}`;
         partyPanel.appendChild(div);
     });
-    if (partyCodeLabel) {
-        partyCodeLabel.innerText = `Party code: ${partyCode}`;
-    }
+
     if (status) {
         const readyCount = players.filter(p => p.ready).length;
         const total = players.length;
-        status.innerText = total === 0 ? 'Waiting for phones to join…' : `${readyCount}/${total} ready • need 2+ to start`;
+        const modeText = gameMode === 'CHOOSE' ? 'Choose next game' : 'Random spin';
+        status.innerText = total === 0 ? 'Waiting for phones to join…' : `${readyCount}/${total} ready • ${modeText}`;
     }
 
     if (codeChipText && partyCode) {
         codeChipText.innerText = `Code: ${partyCode}`;
         codeChip?.classList.add('visible');
+    }
+
+    if (modeLabel) modeLabel.innerText = gameMode === 'CHOOSE' ? 'Choose Next' : 'Random';
+    if (modeBlurb) modeBlurb.innerText = gameMode === 'CHOOSE' ? 'Party leader picks each round from their controller.' : 'We’ll spin up a random mini game each round.';
+    if (leaderName) {
+        const leaderPlayer = players.find(p => p.leader);
+        leaderName.innerText = leaderPlayer ? `${leaderPlayer.name} is leading` : 'Waiting for a leader…';
     }
 
     if (sidebar) {
@@ -308,7 +418,7 @@ export function syncLobbyUI() {
             row.innerHTML = `
                 <div class="host-row-header">
                     <span class="badge" style="background:${p.color}"></span>
-                    <span class="name">${p.name}</span>
+                    <span class="name">${p.name} ${p.leader ? '★' : ''}</span>
                     <span class="ready-chip ${p.ready ? 'ready' : 'waiting'}">${p.ready ? 'Ready' : 'Not ready'}</span>
                 </div>
                 <div class="host-row-meta">

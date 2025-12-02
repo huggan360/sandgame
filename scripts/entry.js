@@ -1,4 +1,4 @@
-import { becomeController, connectControllerToParty, getControllerSlot, initParty, mountControllerUI, onControllerStart, sendJoinRequest, setControllerReady, sendControllerInput, startHosting } from './party.js';
+import { becomeController, connectControllerToParty, getControllerSlot, initParty, mountControllerUI, onChooseGameRequest, onControllerStart, onPartyStateChange, sendChosenGame, sendJoinRequest, sendPartyModeChange, setControllerReady, sendControllerInput, startHosting } from './party.js';
 
 async function init() {
     const role = initParty();
@@ -33,6 +33,11 @@ function setupControllerButtons(prefillCode) {
     const layoutTitle = document.getElementById('controller-layout-title');
     const layoutHelp = document.getElementById('controller-layout-help');
     const colorChoices = document.querySelectorAll('[data-controller-color]');
+    const modeButtons = document.querySelectorAll('[data-mode-choice]');
+    const modeStatus = document.getElementById('mode-status');
+    const gameChoicePanel = document.getElementById('game-choice-panel');
+    const gameChoiceList = document.getElementById('game-choice-list');
+    const choiceHint = document.getElementById('choice-hint');
     let selectedColor = null;
     const controllerLayouts = {
         DEFAULT: { title: 'Standard Controls', help: 'Use the joystick to move. Action appears when a game needs it.', actionLabel: 'Action', showAction: false, crosshair: false },
@@ -45,6 +50,34 @@ function setupControllerButtons(prefillCode) {
         FLAPPY: { title: 'Flappy Flock', help: 'Tap to flap. No joystick needed.', actionLabel: 'Flap', showAction: true, hideStick: true, crosshair: false },
         RUNNER: { title: 'Boardwalk Dash', help: 'Slide left and right to dodge crates.', actionLabel: 'Dodge', showAction: false, crosshair: false },
         SHOOTING: { title: 'Shooter', help: 'Aim carefully and fire straight ahead.', actionLabel: 'Shoot', showAction: true, crosshair: false }
+    };
+    const minigameLabels = {
+        BRAWL: 'Brawl',
+        COLLECT: 'Pineapple Rush',
+        VOLCANO: 'Magma Madness',
+        CRAB: 'Crab Dodge',
+        TANK: 'Tank Takedown',
+        SKY: 'Sky Rink',
+        FLAPPY: 'Flappy Flock',
+        RUNNER: 'Boardwalk Dash'
+    };
+
+    let isLeader = false;
+    let partyMode = 'RANDOM';
+    let selfId = null;
+
+    const updateModeUI = () => {
+        modeButtons?.forEach(btn => {
+            const mode = btn.dataset.modeChoice;
+            const active = partyMode === mode;
+            btn.classList.toggle('active', active);
+            btn.disabled = !isLeader;
+        });
+        if (modeStatus) {
+            modeStatus.textContent = isLeader ? 'You are party leader. Choose how rounds are picked.' : 'Leader decides if rounds are random or chosen.';
+        }
+        if (gameChoicePanel) gameChoicePanel.classList.toggle('not-leader', !isLeader);
+        if (partyMode === 'RANDOM') gameChoicePanel?.classList.add('hidden');
     };
 
     const setSelectedColor = (color) => {
@@ -65,6 +98,15 @@ function setupControllerButtons(prefillCode) {
 
     const readyBtn = document.getElementById('ready-toggle');
     let connected = false;
+    modeButtons?.forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (!isLeader) return;
+            const mode = btn.dataset.modeChoice;
+            partyMode = mode;
+            sendPartyModeChange(mode);
+            updateModeUI();
+        });
+    });
 
     const setReadyWaiting = () => {
         if (!readyBtn) return;
@@ -125,6 +167,10 @@ function setupControllerButtons(prefillCode) {
         try {
             const slot = await sendJoinRequest(name, chosenColor);
             if (slot?.color) setSelectedColor(slot.color);
+            if (slot?.id) selfId = slot.id;
+            isLeader = !!slot?.leader;
+            partyMode = slot?.mode || partyMode;
+            updateModeUI();
             connected = true;
             if (readyBtn) readyBtn.disabled = false;
             statusLine.textContent = `Joined as ${name}. Tap ready while waiting for host.`;
@@ -180,6 +226,7 @@ function setupControllerButtons(prefillCode) {
     };
 
     applyControllerLayout();
+    updateModeUI();
 
     const resetThumb = () => {
         if (!thumb) return;
@@ -241,6 +288,33 @@ function setupControllerButtons(prefillCode) {
         fireBtn?.addEventListener(evt, () => setAction(false));
     });
 
+    onPartyStateChange(({ mode, leaderId }) => {
+        partyMode = mode || 'RANDOM';
+        isLeader = leaderId && selfId ? leaderId === selfId : isLeader;
+        updateModeUI();
+    });
+
+    onChooseGameRequest(({ games }) => {
+        if (!gameChoicePanel || !gameChoiceList) return;
+        gameChoiceList.innerHTML = '';
+        const list = games && games.length ? games : Object.keys(minigameLabels);
+        list.forEach(key => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'choice-btn';
+            btn.textContent = minigameLabels[key] || key;
+            btn.disabled = !isLeader;
+            btn.addEventListener('click', () => {
+                if (!isLeader) return;
+                sendChosenGame(key);
+                gameChoicePanel.classList.add('hidden');
+            });
+            gameChoiceList.appendChild(btn);
+        });
+        if (choiceHint) choiceHint.textContent = isLeader ? 'Pick the next minigame.' : 'Leader is choosing the next game…';
+        gameChoicePanel.classList.remove('hidden');
+    });
+
     onControllerStart((details) => {
         const gameType = details?.game || 'DEFAULT';
         const screen = document.getElementById('controller-screen');
@@ -253,6 +327,7 @@ function setupControllerButtons(prefillCode) {
         if (joinCard) joinCard.style.display = 'none';
         if (status) status.style.display = 'none';
         if (readyBtn) readyBtn.style.display = 'none';
+        gameChoicePanel?.classList.add('hidden');
         applyControllerLayout(gameType);
     });
 
