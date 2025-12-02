@@ -1,4 +1,4 @@
-import { becomeController, connectControllerToParty, getControllerSlot, initParty, mountControllerUI, onChooseGameRequest, onControllerStart, onPartyStateChange, sendChosenGame, sendJoinRequest, sendPartyModeChange, setControllerReady, sendControllerInput, startHosting } from './party.js';
+import { becomeController, connectControllerToParty, getControllerSlot, initParty, mountControllerUI, onChooseGameRequest, onControllerStart, onGameMessage, onPartyStateChange, sendChosenGame, sendJoinRequest, sendPartyModeChange, sendControllerGameMessage, setControllerReady, sendControllerInput, startHosting } from './party.js';
 
 async function init() {
     const role = initParty();
@@ -40,6 +40,10 @@ function setupControllerButtons(prefillCode) {
     const gameChoiceList = document.getElementById('game-choice-list');
     const choiceHint = document.getElementById('choice-hint');
     const leaderboardToggle = document.getElementById('leaderboard-toggle');
+    const satPanel = document.getElementById('satellite-panel');
+    const satGuess = document.getElementById('satellite-guess');
+    const satLockBtn = document.getElementById('satellite-lock');
+    const satStatus = document.getElementById('satellite-status');
     let selectedColor = null;
     const controllerLayouts = {
         DEFAULT: { title: 'Standard Controls', help: 'Use the joystick to move. Action appears when a game needs it.', actionLabel: 'Action', showAction: false, crosshair: false },
@@ -48,9 +52,10 @@ function setupControllerButtons(prefillCode) {
         VOLCANO: { title: 'Magma Madness', help: 'Keep moving to avoid eruptions. No action button needed.', actionLabel: 'Action', showAction: false, crosshair: false },
         CRAB: { title: 'Crab Dodge', help: 'Slide around the crabs — movement only.', actionLabel: 'Action', showAction: false, crosshair: false },
         TANK: { title: 'Tank Takedown', help: 'Aim your turret with the stick. Tap to fire.', actionLabel: 'Fire Cannon', showAction: true, crosshair: false },
-        SKY: { title: 'Sky Rink', help: 'Skate fast and body check foes off the edge.', actionLabel: 'Body Check', showAction: true, crosshair: false },
+        SKY: { title: 'Ice Sumo', help: 'Glide on the ice and bump rivals off. Joystick only.', actionLabel: 'Body Check', showAction: false, crosshair: false },
         FLAPPY: { title: 'Flappy Flock', help: 'Tap to flap. No joystick needed.', actionLabel: 'Flap', showAction: true, hideStick: true, crosshair: false },
-        RUNNER: { title: 'Boardwalk Dash', help: 'Slide left and right to dodge crates.', actionLabel: 'Dodge', showAction: false, crosshair: false },
+        RUNNER: { title: 'Desert Dash', help: 'Tap to jump and dodge obstacles.', actionLabel: 'Jump', showAction: true, crosshair: false },
+        SATELLITE: { title: 'Satellite Guess', help: 'Explore the satellite clue and drop a pin on the map.', actionLabel: 'Lock Guess', showAction: false, hideStick: true, crosshair: false },
         SHOOTING: { title: 'Shooter', help: 'Aim carefully and fire straight ahead.', actionLabel: 'Shoot', showAction: true, crosshair: false }
     };
     const minigameLabels = {
@@ -61,7 +66,8 @@ function setupControllerButtons(prefillCode) {
         TANK: 'Tank Takedown',
         SKY: 'Sky Rink',
         FLAPPY: 'Flappy Flock',
-        RUNNER: 'Boardwalk Dash'
+        RUNNER: 'Boardwalk Dash',
+        SATELLITE: 'Satellite Guess'
     };
 
     let isLeader = false;
@@ -203,10 +209,130 @@ function setupControllerButtons(prefillCode) {
         setControllerReady(!next);
     });
 
+    satLockBtn?.addEventListener('click', () => {
+        if (!satState.guessMarker) {
+            satStatus && (satStatus.textContent = 'Tap the guess map to place your pin first.');
+            return;
+        }
+        const pos = satState.guessMarker.getLatLng();
+        sendControllerGameMessage({
+            game: 'SATELLITE',
+            event: 'guess-lock',
+            lat: pos.lat,
+            lng: pos.lng
+        });
+        satLockBtn.disabled = true;
+        satStatus && (satStatus.textContent = 'Guess locked in! Waiting for others…');
+    });
+
     const state = { x: 0, z: 0, action: false };
     const sendState = () => sendControllerInput(state);
 
     let currentLayout = 'DEFAULT';
+    const satState = {
+        guessMap: null,
+        guessMarker: null,
+        resultLine: null,
+        overlays: [],
+        target: null
+    };
+    let leafletLoading = null;
+
+    const loadLeaflet = () => {
+        if (window.L) return Promise.resolve();
+        if (leafletLoading) return leafletLoading;
+        leafletLoading = new Promise((resolve, reject) => {
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+            link.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';
+            link.crossOrigin = '';
+            document.head.appendChild(link);
+
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+            script.integrity = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
+            script.crossOrigin = '';
+            script.onload = resolve;
+            script.onerror = () => reject(new Error('Failed to load Leaflet'));
+            document.head.appendChild(script);
+        });
+        return leafletLoading;
+    };
+
+    const setupSatelliteMaps = async (payload) => {
+        satLockBtn && (satLockBtn.disabled = true);
+        satStatus && (satStatus.textContent = 'Loading maps…');
+        if (!satPanel) return;
+        satPanel.style.display = 'block';
+        await loadLeaflet();
+
+        const target = payload?.target || { lat: 0, lng: 0, zoom: 2 };
+        satState.target = target;
+
+        if (!satState.guessMap) {
+            satState.guessMap = L.map(satGuess).setView([20, 0], 1);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+            }).addTo(satState.guessMap);
+            satState.guessMap.on('click', (e) => {
+                if (!satState.guessMap) return;
+                if (satState.guessMarker) {
+                    satState.guessMarker.setLatLng(e.latlng);
+                } else {
+                    satState.guessMarker = L.marker(e.latlng).addTo(satState.guessMap);
+                }
+                satLockBtn && (satLockBtn.disabled = false);
+                satStatus && (satStatus.textContent = 'Pin placed. Lock in your guess.');
+            });
+        }
+
+        // Reset overlays
+        if (satState.overlays.length) {
+            satState.overlays.forEach(layer => layer && satState.guessMap?.removeLayer(layer));
+            satState.overlays = [];
+        }
+        if (satState.guessMarker) {
+            satState.guessMap.removeLayer(satState.guessMarker);
+            satState.guessMarker = null;
+        }
+        if (satState.resultLine) {
+            satState.guessMap.removeLayer(satState.resultLine);
+            satState.resultLine = null;
+        }
+        satState.guessMap.setView([20, 0], 1);
+        satStatus && (satStatus.textContent = 'Tap the map to place your pin.');
+        setTimeout(() => satState.guessMap?.invalidateSize(), 50);
+    };
+
+    const finishSatelliteRound = (payload) => {
+        satLockBtn && (satLockBtn.disabled = true);
+        if (!payload?.target || !payload?.guesses || !satState.guessMap || !window.L) {
+            satStatus && (satStatus.textContent = 'Round ended.');
+            return;
+        }
+        satStatus && (satStatus.textContent = 'Round ended. Results on host screen.');
+        const myGuess = payload.guesses[getControllerSlot()?.slot ?? -1];
+        if (myGuess && !myGuess.missed && typeof myGuess.lat === 'number' && typeof myGuess.lng === 'number') {
+            const line = L.polyline([[payload.target.lat, payload.target.lng], [myGuess.lat, myGuess.lng]], {
+                color: '#ef4444',
+                weight: 3,
+                opacity: 0.7,
+                dashArray: '10, 10'
+            }).addTo(satState.guessMap);
+            satState.resultLine = line;
+            satState.overlays.push(line);
+            const targetMarker = L.circleMarker([payload.target.lat, payload.target.lng], {
+                color: '#10b981',
+                fillColor: '#10b981',
+                fillOpacity: 1,
+                radius: 8
+            }).addTo(satState.guessMap);
+            satState.overlays.push(targetMarker);
+            satState.guessMap.fitBounds(L.latLngBounds([[payload.target.lat, payload.target.lng], [myGuess.lat, myGuess.lng]]).pad(0.2));
+        }
+    };
+
     const applyControllerLayout = (gameType = 'DEFAULT') => {
         currentLayout = gameType || 'DEFAULT';
         const config = controllerLayouts[currentLayout] || controllerLayouts.DEFAULT;
@@ -226,7 +352,12 @@ function setupControllerButtons(prefillCode) {
             sendState();
         }
 
-        if (pad) pad.classList.toggle('movement-only', !showAction);
+        if (pad) {
+            // Keep layout consistent even when action is hidden
+            pad.classList.remove('movement-only');
+            pad.style.display = currentLayout === 'SATELLITE' ? 'none' : '';
+        }
+        if (satPanel) satPanel.style.display = currentLayout === 'SATELLITE' ? 'block' : 'none';
 
         if (joystick) {
             joystick.style.display = config.hideStick ? 'none' : 'block';
@@ -336,11 +467,22 @@ function setupControllerButtons(prefillCode) {
         gameChoicePanel.classList.add('active');
     });
 
+    onGameMessage((payload) => {
+        if (payload?.game !== 'SATELLITE') return;
+        if (payload.event === 'round-start') {
+            applyControllerLayout('SATELLITE');
+            setupSatelliteMaps(payload);
+        } else if (payload.event === 'round-end') {
+            finishSatelliteRound(payload);
+        }
+    });
+
     onControllerStart((details) => {
         const gameType = details?.game || 'DEFAULT';
         const screen = document.getElementById('controller-screen');
         if (screen) screen.classList.add('started');
-        if (pad) pad.style.display = 'flex';
+        if (pad && gameType !== 'SATELLITE') pad.style.display = 'flex';
+        if (gameType === 'SATELLITE' && satPanel) satPanel.style.display = 'block';
         if (statusLine) statusLine.textContent = 'Countdown started! Get ready to play.';
         // Hide join card and status, keep only header with name/party code
         const joinCard = document.getElementById('controller-join');
@@ -358,6 +500,7 @@ function setupControllerButtons(prefillCode) {
         const selfId = evt.detail?.selfId;
         screen?.classList.remove('started');
         if (pad) pad.style.display = 'none';
+        if (satPanel) satPanel.style.display = 'none';
         if (controls) controls.style.display = 'block';
         if (readyBtn) readyBtn.style.display = 'block';
         if (modePanel) modePanel.style.display = 'block';
@@ -367,6 +510,12 @@ function setupControllerButtons(prefillCode) {
         setControllerReady(false);
         renderLeaderboard(leaderboard, selfId);
         applyControllerLayout('DEFAULT');
+    });
+
+    window.addEventListener('resize', () => {
+        if (satState.guessMap?.invalidateSize) {
+            satState.guessMap.invalidateSize();
+        }
     });
 }
 

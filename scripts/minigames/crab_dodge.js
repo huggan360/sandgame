@@ -9,7 +9,9 @@ export class CrabDodgeGame {
         return {
             title: 'Crab Dodge',
             description: 'Sidestep the sideways crabs! Take 3 pinches before you’re out.',
-            penalty: '1 Sip'
+            penalty: '1 Sip',
+            environment: 'ISLAND',
+            duration: 60
         };
     }
 

@@ -12,6 +12,8 @@ let startListeners = [];
 let readinessListeners = [];
 let partyStateListeners = [];
 let chooseListeners = [];
+let gameMessageListeners = [];
+let hostGameMessageListeners = [];
 let lastReadyState = false;
 let slotResolvers = [];
 const availableColors = ['#00ffaa', '#ff00ff', '#ffd166', '#60a5fa', '#ff7f50', '#8ce99a'];
@@ -160,6 +162,8 @@ function handleControllerMessage(conn, msg) {
         const resolver = choiceResolver;
         clearChoiceResolver();
         resolver(msg.game);
+    } else if (msg.type === 'game-msg') {
+        hostGameMessageListeners.forEach(cb => cb({ from: conn.peer, payload: msg.payload }));
     }
 }
 
@@ -198,6 +202,9 @@ function attachControllerConn(conn, reject) {
             controllerState.started = true;
             controllerState.game = data.game;
             startListeners.forEach(cb => cb({ game: data.game }));
+        }
+        if (data.type === 'game-msg') {
+            gameMessageListeners.forEach(cb => cb(data.payload));
         }
         if (data.type === 'party-state') {
             partyStateListeners.forEach(cb => cb({ mode: data.mode, leaderId: data.leaderId }));
@@ -262,6 +269,26 @@ export function broadcastGameEnd(winnerSlot) {
         leader: p.leader
     }));
     connections.forEach(c => c.open && c.send({ type: 'game-end', leaderboard }));
+}
+
+export function broadcastGameMessage(payload) {
+    if (role !== 'host') return;
+    connections.forEach(c => c.open && c.send({ type: 'game-msg', payload }));
+}
+
+export function onGameMessage(cb) {
+    if (typeof cb === 'function') gameMessageListeners.push(cb);
+}
+
+export function onControllerGameMessage(cb) {
+    if (typeof cb === 'function') hostGameMessageListeners.push(cb);
+}
+
+export function sendControllerGameMessage(payload) {
+    if (role !== 'controller') return;
+    if (controllerState.conn?.open) {
+        controllerState.conn.send({ type: 'game-msg', payload });
+    }
 }
 
 export function sendPartyModeChange(mode) {

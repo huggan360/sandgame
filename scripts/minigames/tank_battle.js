@@ -29,7 +29,8 @@ export class TankBattleGame {
             title: 'Tank Takedown',
             description: 'Tropical tank skirmish. Use crates and driftwood for cover while blasting rivals.',
             penalty: '3 Sips',
-            environment: 'ISLAND'
+            environment: 'TANK',
+            duration: 60
         };
     }
 

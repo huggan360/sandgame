@@ -10,7 +10,9 @@ export class VolcanoGame {
         return {
             title: 'Magma Madness',
             description: 'Dodge the Magma Rocks! Getting hit STUNS you for 1.5s.',
-            penalty: '3 Sips'
+            penalty: '3 Sips',
+            environment: 'VOLCANO',
+            duration: 60
         };
     }
 

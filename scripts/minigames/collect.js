@@ -9,7 +9,9 @@ export class CollectGame {
         return {
             title: 'Pineapple Rush',
             description: 'Race to 5 points! Golden Pineapples are worth triple.',
-            penalty: 'Score Diff'
+            penalty: 'Score Diff',
+            environment: 'ISLAND',
+            duration: 60
         };
     }
 

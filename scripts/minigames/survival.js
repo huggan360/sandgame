@@ -9,7 +9,9 @@ export class SurvivalGame {
         return {
             title: 'Coconut Chaos',
             description: 'Dodge dropping coconuts that get faster every second!',
-            penalty: '2 Sips'
+            penalty: '2 Sips',
+            environment: 'ISLAND',
+            duration: 60
         };
     }
 

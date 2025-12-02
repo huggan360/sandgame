@@ -13,6 +13,7 @@ import { RoadRunnerGame } from './minigames/road_runner.js';
 import { CrabDodgeGame } from './minigames/crab_dodge.js';
 import { TankBattleGame } from './minigames/tank_battle.js';
 import { SkySlamGame } from './minigames/sky_slam.js';
+import { SatelliteGuessGame } from './minigames/satellite_guess.js';
 
 const ui = {
     lobby: document.getElementById('lobby-card'),
@@ -32,10 +33,16 @@ const ui = {
     codeChip: document.getElementById('party-chip'),
     codeChipText: document.getElementById('party-chip-text'),
     resultStatus: document.getElementById('result-ready-status'),
-    partyStatus: document.getElementById('party-status')
+    partyStatus: document.getElementById('party-status'),
+    satPanel: document.getElementById('satellite-host'),
+    satCity: document.getElementById('satellite-host-city'),
+    satMap: document.getElementById('satellite-host-map'),
+    satList: document.getElementById('satellite-host-list'),
+    satChip: document.getElementById('satellite-host-chip'),
+    satTimer: document.getElementById('satellite-host-timer')
 };
 
-const minigameOrder = ['BRAWL', 'COLLECT', 'VOLCANO', 'CRAB', 'TANK', 'SKY', 'FLAPPY', 'RUNNER'];
+const minigameOrder = ['BRAWL', 'COLLECT', 'VOLCANO', 'CRAB', 'TANK', 'SKY', 'FLAPPY', 'RUNNER', 'SATELLITE'];
 const minigameColors = {
     BRAWL: '#FF512F',
     COLLECT: '#FFD700',
@@ -44,7 +51,8 @@ const minigameColors = {
     TANK: '#57c7ff',
     SKY: '#8ECBFF',
     FLAPPY: '#00BCD4',
-    RUNNER: '#4CAF50'
+    RUNNER: '#4CAF50',
+    SATELLITE: '#4e72ff'
 };
 const minigameLabels = {
     BRAWL: 'Brawl',
@@ -54,7 +62,20 @@ const minigameLabels = {
     TANK: 'Tank Takedown',
     SKY: 'Sky Rink',
     FLAPPY: 'Flappy Flock',
-    RUNNER: 'Boardwalk Dash'
+    RUNNER: 'Desert Dash',
+    SATELLITE: 'Satellite Guess'
+};
+
+const minigameTitleStyles = {
+    BRAWL: 'font-size:3rem; color:#ff512f; text-shadow:3px 3px 0 #7a1f1f; letter-spacing:1px; text-transform:uppercase; font-weight:900;',
+    COLLECT: 'font-size:3rem; color:#ffd700; text-shadow:3px 3px 0 #c9a300; letter-spacing:1px; font-weight:900;',
+    VOLCANO: 'font-size:3rem; color:#ff7043; text-shadow:3px 3px 0 #3b0b07; letter-spacing:1px; text-transform:uppercase; font-weight:900;',
+    CRAB: 'font-size:3rem; color:#ffa040; text-shadow:3px 3px 0 #7a3a00; font-weight:900;',
+    TANK: 'font-size:3rem; color:#57c7ff; text-shadow:3px 3px 0 #12324d; text-transform:uppercase; font-weight:900;',
+    SKY: 'font-size:3rem; color:#8ecbff; text-shadow:3px 3px 0 #1a4c7a; letter-spacing:1px; font-weight:900;',
+    FLAPPY: 'font-size:3.2rem; margin-bottom:0.3rem; color:#ffca28; text-shadow:3px 3px 0 #d84315; font-family:"Comic Sans MS","Chalkboard SE",sans-serif; letter-spacing:2px;',
+    RUNNER: 'font-size:3.2rem; margin-bottom:0.3rem; color:#ff6d00; text-shadow:4px 4px 0 #bf360c; font-family:"Arial Black",sans-serif; font-style:italic; letter-spacing:-1px; text-transform:uppercase;',
+    SATELLITE: 'font-size:3rem; color:#31ffb0; text-shadow:3px 3px 0 #0e3b32; letter-spacing:1px; font-weight:900;'
 };
 
 const minigames = {
@@ -65,8 +86,98 @@ const minigames = {
     'TANK': new TankBattleGame(),
     'SKY': new SkySlamGame(),
     'FLAPPY': new FlappyFlockGame(),
-    'RUNNER': new RoadRunnerGame()
+    'RUNNER': new RoadRunnerGame(),
+    'SATELLITE': new SatelliteGuessGame()
 };
+
+let satHostMap = null;
+let satHostMarkers = [];
+let satLatestResult = null;
+
+function clearSatelliteHost() {
+    if (satHostMarkers.length) {
+        satHostMarkers.forEach(m => satHostMap && satHostMap.removeLayer(m));
+        satHostMarkers = [];
+    }
+    if (ui.satList) ui.satList.innerHTML = '';
+    if (ui.satPanel) ui.satPanel.classList.remove('active');
+}
+
+function ensureSatMap(target) {
+    if (!ui.satMap) return null;
+    if (!satHostMap && window.L) {
+        satHostMap = L.map(ui.satMap, { zoomControl: true, attributionControl: true });
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles © Esri'
+        }).addTo(satHostMap);
+    }
+    if (satHostMap && target) satHostMap.setView([target.lat, target.lng], target.zoom || 13);
+    return satHostMap;
+}
+
+function refreshSatMap() {
+    if (satHostMap?.invalidateSize) {
+        setTimeout(() => satHostMap.invalidateSize(), 50);
+    }
+}
+
+function showSatelliteRoundStart(target) {
+    if (!ui.satPanel) return;
+    clearSatelliteHost();
+    ui.satCity && (ui.satCity.textContent = 'Guess the City');
+    ui.satPanel.classList.add('active');
+    ensureSatMap(target);
+    const code = getPartyCode();
+    if (ui.satChip && code) ui.satChip.textContent = `Code: ${code}`;
+    if (ui.satTimer) ui.satTimer.textContent = `${Math.round(GameManager.gameDuration || target?.duration || 60)}s`;
+    refreshSatMap();
+}
+
+function showSatelliteResults(target, guesses = {}) {
+    const map = ensureSatMap(target);
+    if (!map) return;
+    clearSatelliteHost();
+    ui.satCity && (ui.satCity.textContent = target?.name || 'Results');
+
+    const bounds = [];
+    const addMarker = (lat, lng, color, label) => {
+        const marker = L.circleMarker([lat, lng], {
+            color: color || '#ffffff',
+            fillColor: color || '#ffffff',
+            fillOpacity: 0.9,
+            radius: 8
+        }).addTo(map).bindTooltip(label, { permanent: true, direction: 'top', offset: [0, -6] });
+        satHostMarkers.push(marker);
+        bounds.push([lat, lng]);
+    };
+
+    addMarker(target.lat, target.lng, '#10b981', target.name || 'Target');
+
+        Object.entries(guesses).forEach(([slot, guess]) => {
+            const distLabel = Number.isFinite(guess?.dist) ? `${guess.dist.toFixed(1)} km` : 'No guess';
+            const label = guess.missed ? `${guess.name || 'Player'} (no guess)` : `${guess.name || 'Player'} • ${distLabel}`;
+            if (!guess.missed && typeof guess.lat === 'number' && typeof guess.lng === 'number') {
+                addMarker(guess.lat, guess.lng, guess.color, label);
+            }
+            if (ui.satList) {
+                const row = document.createElement('div');
+                row.className = 'sat-host-row';
+                row.dataset.slot = slot;
+                row.innerHTML = `
+                    <span class="name"><span class="badge" style="background:${guess.color || '#fff'}"></span>${guess.name || 'Player'}${guess.missed ? ' (no guess)' : ''}</span>
+                    <span class="dist">${guess.missed ? '—' : distLabel}</span>
+                `;
+                ui.satList.appendChild(row);
+        }
+    });
+
+    if (bounds.length) {
+        map.fitBounds(L.latLngBounds(bounds).pad(0.25));
+    }
+    ui.satPanel.classList.add('active');
+    satLatestResult = { target, guesses };
+    refreshSatMap();
+}
 
 const GameManager = {
     state: 'LOBBY',
@@ -74,6 +185,7 @@ const GameManager = {
     currentMinigame: null,
     scores: [0,0,0,0],
     timer: 0,
+    gameDuration: 60,
     currentRotation: 0,
     boundaryLimit: 8,
     playerCount: 2,
@@ -179,9 +291,16 @@ const GameManager = {
         this.currentMinigame = minigames[type];
         ui.intro.classList.add('active');
         const info = this.currentMinigame.meta;
+        this.gameDuration = info.duration ?? 60;
         ui.title.innerText = info.title;
+        if (ui.title) {
+            ui.title.removeAttribute('style');
+            const sty = info.titleStyle || minigameTitleStyles[type];
+            if (sty) ui.title.style.cssText = sty;
+        }
         ui.desc.innerText = info.description;
         ui.penalty.innerText = info.penalty;
+        satLatestResult = null;
 
         const players = getPlayers();
         this.playerCount = Math.max(2, Math.min(4, players.length || 2));
@@ -219,7 +338,7 @@ const GameManager = {
 
     beginGameplay() {
         ui.intro.classList.remove('active');
-        ui.timer.style.display = 'block';
+        ui.timer.style.display = this.currentGame === 'FLAPPY' ? 'none' : 'block';
         this.state = 'PLAYING';
         this.timer = 0;
         this.currentMinigame.start(this.getActiveMeshes(), this);
@@ -229,16 +348,44 @@ const GameManager = {
     endGame(winnerSlot) {
         this.state = 'RESULT';
         ui.timer.style.display = 'none';
+        if (this.currentGame === 'SATELLITE') {
+            // Custom result overlay instead of result card
+            const players = getPlayers();
+            if (ui.result) ui.result.classList.remove('active');
+            if (satLatestResult && ui.satList) {
+                // Append drink info to rows
+                const winners = typeof winnerSlot === 'number' ? [winnerSlot] : [];
+                const drinkRows = ui.satList.querySelectorAll('.sat-host-row');
+                drinkRows.forEach(row => {
+                    const nameEl = row.querySelector('.name');
+                    const distEl = row.querySelector('.dist');
+                    const slotAttr = row.dataset.slot;
+                    const slot = slotAttr ? Number(slotAttr) : null;
+                    const isWinner = winners.includes(slot);
+                    const isMissed = (satLatestResult.guesses?.[slot]?.missed) === true;
+                    if (isWinner) {
+                        distEl.textContent = 'Winner';
+                    } else {
+                        distEl.textContent = isMissed ? 'No guess - drink 3 sips' : 'Drink 3 sips';
+                    }
+                    if (nameEl && isMissed) {
+                        nameEl.innerHTML += ' (no guess)';
+                    }
+                });
+            }
+            broadcastGameEnd(winnerSlot);
+            return;
+        }
         let text = '';
         let penalty = '';
         const players = getPlayers();
         if (typeof winnerSlot === 'number') {
             const winnerName = players.find(p => p.slot === winnerSlot)?.name || `Player ${winnerSlot + 1}`;
-            text = `${winnerName} WINS!`;
+            text = `${winnerName} dominates ${minigameLabels[this.currentGame] || 'the arena'}!`;
             const losers = this.activeSlots.filter(s => s !== winnerSlot);
             penalty = losers.length === 1 ? this.getPenalty(losers[0]) : 'Everyone else drinks 1 sip';
         } else {
-            text = 'DRAW!';
+            text = `Draw in ${minigameLabels[this.currentGame] || 'this round'}!`;
             penalty = 'Everyone drinks 1 sip';
         }
         ui.winnerText.innerText = text;
@@ -246,6 +393,9 @@ const GameManager = {
         if (ui.resultStatus) ui.resultStatus.innerText = 'Waiting for everyone to ready up…';
         ui.result.classList.add('active');
         broadcastGameEnd(winnerSlot);
+        if (typeof this.currentMinigame?.teardown === 'function') {
+            this.currentMinigame.teardown();
+        }
     },
 
     getPenalty(loserSlot) {
@@ -258,6 +408,7 @@ const GameManager = {
         if(this.currentGame === 'SKY') return `${loserName} finishes their drink`;
         if(this.currentGame === 'FLAPPY') return `${loserName} drinks 2 sips`;
         if(this.currentGame === 'RUNNER') return `${loserName} takes 2 sips`;
+        if(this.currentGame === 'SATELLITE') return `${loserName} drinks 3 sips`;
         return 'Drink up!';
     },
 
@@ -309,6 +460,7 @@ const GameManager = {
         ui.lobby.classList.add('active');
         setEnvironment('ISLAND');
         clearGameObjects();
+        clearSatelliteHost();
         resetPlayers(this.playerCount);
         this.state = 'LOBBY';
         this.setBoundaryLimit(8);
@@ -322,6 +474,7 @@ const GameManager = {
         ui.lobby.classList.add('active');
         setEnvironment('ISLAND');
         clearGameObjects();
+        clearSatelliteHost();
         resetPlayers(this.playerCount);
         this.state = 'LOBBY';
         this.setBoundaryLimit(8);
@@ -344,6 +497,9 @@ const GameManager = {
             if(this.currentGame === 'COLLECT' || this.currentGame === 'FLAPPY') {
                 const score = this.scores[slot] || 0;
                 return `Score: ${score}`;
+            } else if (this.currentGame === 'SATELLITE') {
+                const dist = this.scores[slot];
+                return Number.isFinite(dist) ? `Off by ${dist.toFixed(1)} km` : 'No guess';
             } else if(this.currentGame === 'BRAWL' || this.currentGame === 'VOLCANO' || this.currentGame === 'TANK' || this.currentGame === 'CRAB' || this.currentGame === 'RUNNER') {
                 const hp = playerMeshes[slot]?.hp ?? 0;
                 return `HP: ${hp}`;
@@ -490,7 +646,7 @@ function checkCollectionWin(manager) {
 let lastTime = 0;
 function animate(time) {
     requestAnimationFrame(animate);
-    const dt = (time - lastTime) / 1000;
+    const dt = Math.min((time - lastTime) / 1000, 0.05);
     lastTime = time;
     const activeMeshes = GameManager.getActiveMeshes();
     const inputs = GameManager.getActiveInputs();
@@ -529,9 +685,15 @@ function animate(time) {
 
     if (GameManager.state === 'PLAYING') {
         GameManager.timer += dt;
-        ui.timer.innerText = Math.max(0, Math.floor(30 - GameManager.timer)).toString();
+        const duration = GameManager.gameDuration;
+        if (Number.isFinite(duration) && GameManager.currentGame !== 'FLAPPY') {
+            ui.timer.innerText = Math.max(0, Math.floor(duration - GameManager.timer)).toString();
+        } else {
+            ui.timer.innerText = '';
+        }
         // Time limit ends game (Player with most HP wins in Volcano/Brawl/Tank)
-        if(GameManager.timer >= 30 && GameManager.currentGame !== 'COLLECT') {
+        const timeUp = Number.isFinite(duration) && GameManager.timer >= duration;
+        if(timeUp && GameManager.currentGame !== 'COLLECT') {
             if(GameManager.currentGame === 'BRAWL' || GameManager.currentGame === 'VOLCANO' || GameManager.currentGame === 'TANK' || GameManager.currentGame === 'CRAB' || GameManager.currentGame === 'RUNNER') {
                 let bestSlot = null; let bestHp = -Infinity; let tie = false;
                 GameManager.activeSlots.forEach(slot => {
@@ -550,12 +712,18 @@ function animate(time) {
                 });
                 if (!tie && bestSlot !== null) GameManager.endGame(bestSlot);
                 else GameManager.endGame(null);
-            } else {
+            } else if (GameManager.currentGame !== 'SATELLITE') {
                 GameManager.endGame(null);
             }
         }
         GameManager.currentMinigame.update(dt, inputs, activeMeshes, GameManager.timer, GameManager);
         processObjects(dt, activeMeshes, GameManager);
+    }
+
+    if (GameManager.currentGame === 'SATELLITE' && ui.satTimer) {
+        const roundLen = GameManager.gameDuration || 60;
+        const remaining = Math.max(0, roundLen - GameManager.timer);
+        ui.satTimer.textContent = `${Math.round(remaining)}s`;
     }
 
     updateCamera(GameManager.state);
@@ -564,6 +732,13 @@ function animate(time) {
 
 export function bootstrapGame() {
     window.GameManager = GameManager;
+    window.addEventListener('satellite-round-start', (evt) => {
+        showSatelliteRoundStart(evt.detail?.target);
+    });
+    window.addEventListener('satellite-round-end', (evt) => {
+        showSatelliteResults(evt.detail?.target, evt.detail?.guesses);
+    });
+
     const code = getPartyCode();
     if (ui.codeChipText) {
         ui.codeChipText.innerText = `Code: ${code}`;

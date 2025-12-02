@@ -9,7 +9,9 @@ export class BrawlGame {
         return {
             title: 'Tiki Brawl',
             description: 'Shoot! Use Crates for Cover! 3 Hits to Win.',
-            penalty: '1 Sip'
+            penalty: '1 Sip',
+            environment: 'ISLAND',
+            duration: 60
         };
     }
 

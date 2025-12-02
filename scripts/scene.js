@@ -1,3 +1,11 @@
+import { createArenaScene, createArenaFloor } from './scenes/arena_scene.js';
+import { createBeachScene } from './scenes/beach_scene.js';
+import { createFlappyScene } from './scenes/flappy_scene.js';
+import { createRunnerScene } from './scenes/runner_scene.js';
+import { createSkyScene } from './scenes/sky_scene.js';
+import { createTankScene } from './scenes/tank_scene.js';
+import { createVolcanoScene } from './scenes/volcano_scene.js';
+
 // Scene and shared assets
 export const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);
@@ -46,86 +54,24 @@ const defaultColors = ['#00ffaa', '#ff00ff', '#ffd166', '#60a5fa'];
 let playerColors = [...defaultColors];
 const baseBoundaryLimit = 8;
 const basePlayRadius = baseBoundaryLimit + 0.5;
+const baseFogColor = 0x87CEEB;
 
-// --- ENVIRONMENTS --- //
-
-// 1. Beach Environment
-export const islandGroup = new THREE.Group();
-scene.add(islandGroup);
-const ocean = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), mats.water);
-ocean.rotation.x = -Math.PI/2;
-ocean.position.y = -0.5;
-ocean.receiveShadow = true;
-scene.add(ocean); // Keep ocean always, change color later
-const island = new THREE.Mesh(new THREE.CylinderGeometry(basePlayRadius, basePlayRadius, 1, 32), mats.sand);
-island.position.y = -0.5;
-island.receiveShadow = true;
-islandGroup.add(island);
-
-function createPalm(x, z) {
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.2, 3, 6), mats.wood);
-    trunk.position.set(x, 1, z);
-    trunk.castShadow = true;
-    trunk.receiveShadow = true;
-    islandGroup.add(trunk);
-    const leaves = new THREE.Mesh(new THREE.ConeGeometry(1.5, 1, 5), mats.leaf);
-    leaves.position.set(x, 2.5, z);
-    leaves.castShadow = true;
-    leaves.receiveShadow = true;
-    islandGroup.add(leaves);
-}
-for(let i=0; i<8; i++) {
-    const a = i/8 * Math.PI*2;
-    createPalm(Math.cos(a)*(baseBoundaryLimit - 1), Math.sin(a)*(baseBoundaryLimit - 1));
-}
-
-// 2. Arena Floor (Standard Minigames)
-export const arena = new THREE.Mesh(new THREE.CylinderGeometry(basePlayRadius, basePlayRadius, 0.5, 32), new THREE.MeshStandardMaterial({color: 0x444444}));
-arena.position.y = 100; // Hidden by default
-arena.receiveShadow = true;
-scene.add(arena);
-
-// 3. Volcano Environment (New Scene)
-export const volcanoGroup = new THREE.Group();
-volcanoGroup.visible = false;
-scene.add(volcanoGroup);
-
-const volcanoPlatform = new THREE.Mesh(new THREE.CylinderGeometry(8, 6, 2, 8), mats.obsidian);
-volcanoPlatform.position.y = -1;
-volcanoPlatform.castShadow = true;
-volcanoPlatform.receiveShadow = true;
-volcanoGroup.add(volcanoPlatform);
-const lava = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), mats.magma);
-lava.rotation.x = -Math.PI/2;
-lava.position.y = -2;
-volcanoGroup.add(lava);
-
-// 4. Flappy Backdrop (2D lane)
-export const flappyGroup = new THREE.Group();
-flappyGroup.visible = false;
-scene.add(flappyGroup);
-const flappyBackdrop = new THREE.Mesh(new THREE.PlaneGeometry(40, 20), new THREE.MeshStandardMaterial({ color: 0x9ad6ff }));
-flappyBackdrop.position.set(0, 6, -8);
-flappyGroup.add(flappyBackdrop);
-const flappyFloor = new THREE.Mesh(new THREE.BoxGeometry(40, 1, 1), new THREE.MeshStandardMaterial({ color: 0x7cc576 }));
-flappyFloor.position.set(0, 0, -8);
-flappyGroup.add(flappyFloor);
-
-// 5. Runner Road
-export const runnerGroup = new THREE.Group();
-runnerGroup.visible = false;
-scene.add(runnerGroup);
-const road = new THREE.Mesh(new THREE.PlaneGeometry(16, 80), new THREE.MeshStandardMaterial({ color: 0x333333 }));
-road.rotation.x = -Math.PI / 2;
-road.position.set(0, -0.01, 18);
-road.receiveShadow = true;
-runnerGroup.add(road);
-for (let i = -2; i <= 2; i++) {
-    const stripe = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 80), new THREE.MeshStandardMaterial({ color: 0xf2f2f2 }));
-    stripe.rotation.x = -Math.PI / 2;
-    stripe.position.set(i * 2, 0.001, 18);
-    runnerGroup.add(stripe);
-}
+// Scene registry keeps each environment in its own module
+const sharedFloor = createArenaFloor(scene, mats, basePlayRadius);
+const sceneContext = { scene, mats, baseBoundaryLimit, basePlayRadius, sharedFloor };
+const sceneDefinitions = [
+    createBeachScene(sceneContext),
+    createVolcanoScene(sceneContext),
+    createFlappyScene(sceneContext),
+    createRunnerScene(sceneContext),
+    createArenaScene(sceneContext),
+    createSkyScene(sceneContext),
+    createTankScene(sceneContext)
+];
+const sceneRegistry = sceneDefinitions.reduce((acc, def) => {
+    acc[def.id] = def;
+    return acc;
+}, {});
 
 // Players
 function createPlayerMesh(mat) {
@@ -367,88 +313,31 @@ export function flashHit(mesh) {
 }
 
 // Controls Environment Switching
-export function setEnvironment(type) {
-    // Reset positions
-    arena.position.y = 100;
-    islandGroup.visible = false;
-    volcanoGroup.visible = false;
-    flappyGroup.visible = false;
-    runnerGroup.visible = false;
-    ocean.visible = type === 'ISLAND';
+function hideAllScenes() {
+    sceneDefinitions.forEach(def => def.disable());
+}
 
-    // Reset Light & Fog
+function resetLighting() {
     ambientLight.color.setHex(0xffffff);
     ambientLight.intensity = 0.6;
-    scene.fog.color.setHex(0x87CEEB);
-    scene.background = new THREE.Color(0x87CEEB);
+    scene.fog.color.setHex(baseFogColor);
+    scene.background = new THREE.Color(baseFogColor);
     dirLight.color.setHex(0xffdfba);
+}
 
-    if (type === 'ISLAND') {
-        islandGroup.visible = true;
-    } 
-    else if (type === 'VOLCANO') {
-        volcanoGroup.visible = true;
-        // Dark Red Atmosphere
-        scene.background = new THREE.Color(0x110000);
-        scene.fog.color.setHex(0x220000);
-        dirLight.color.setHex(0xff4400);
-        ambientLight.color.setHex(0x550000);
-    }
-    else if (type === 'SKY') {
-        arena.position.y = 4;
-        arena.material = mats.ice;
-        arena.scale.set(1, 1, 1);
-        scene.background = new THREE.Color(0xcce8ff);
-        scene.fog.color.setHex(0xb7d9ff);
-        ambientLight.intensity = 0.9;
-        dirLight.color.setHex(0xffffff);
-    }
-    else if (type === 'TANK') {
-        arena.position.y = 100; // Hide the circular arena
-        scene.background = new THREE.Color(0x0f182b);
-        scene.fog.color.setHex(0x14233d);
-        ambientLight.intensity = 0.75;
-        dirLight.color.setHex(0xcde3ff);
-        ocean.visible = false;
-    }
-    else if (type === 'FLAPPY') {
-        flappyGroup.visible = true;
-        arena.position.y = 100;
-        islandGroup.visible = false;
-        volcanoGroup.visible = false;
-        ocean.visible = false;
-        scene.background = new THREE.Color(0xa3d8ff);
-        scene.fog.color.setHex(0xa3d8ff);
-        ambientLight.intensity = 0.9;
-        dirLight.color.setHex(0xffffff);
-    }
-    else if (type === 'RUNNER') {
-        runnerGroup.visible = true;
-        arena.position.y = 100;
-        islandGroup.visible = false;
-        volcanoGroup.visible = false;
-        ocean.visible = false;
-        scene.background = new THREE.Color(0x14233d);
-        scene.fog.color.setHex(0x14233d);
-        ambientLight.intensity = 0.8;
-        dirLight.color.setHex(0xc0d6ff);
-    }
-    else { // Standard Arena
-        arena.position.y = 0.1;
-        arena.material = mats.obsidian;
-        islandGroup.visible = false; // Keep surrounding ocean? Or hide?
-        // Dark blue space for Arena
-        scene.background = new THREE.Color(0x203040);
-        ambientLight.intensity = 0.8;
-    }
+export function setEnvironment(type) {
+    hideAllScenes();
+    resetLighting();
+    const target = sceneRegistry[type] || sceneRegistry.ARENA;
+    target.enable({ ambientLight, dirLight, scene });
 }
 
 export function setPlayAreaSize(limit) {
     const effectiveLimit = limit ?? baseBoundaryLimit;
     const scale = effectiveLimit / baseBoundaryLimit;
-    islandGroup.scale.setScalar(scale);
-    arena.scale.setScalar(scale);
-    volcanoGroup.scale.setScalar(scale);
+    sceneDefinitions.forEach(def => {
+        if (typeof def.resize === 'function') def.resize(scale);
+    });
 
     const shadowExtent = Math.max(14, effectiveLimit + 6);
     const cam = dirLight.shadow.camera;
@@ -471,12 +360,12 @@ export function updateCamera(state) {
     const currentGame = window.GameManager?.currentGame;
     if (currentGame === 'FLAPPY') {
         camera.position.set(0, 10, 20);
-        camera.lookAt(0, 6, -8);
+        camera.lookAt(0, 6, 0);
         camera.rotation.z = 0;
     } else if (currentGame === 'RUNNER') {
         // Trail behind the runners, looking down the boardwalk
-        camera.position.set(0, 12, -24);
-        camera.lookAt(0, 4, 12);
+        camera.position.set(0, 12, 20);
+        camera.lookAt(0, 4, 0);
         camera.rotation.z = 0;
     } else if (currentGame === 'TANK') {
         camera.position.set(0, 34, 0.001);
@@ -495,3 +384,4 @@ window.addEventListener('resize', () => {
 });
 
 setPlayAreaSize(baseBoundaryLimit);
+setEnvironment('ISLAND');
