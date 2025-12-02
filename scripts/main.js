@@ -8,7 +8,8 @@ import { allReady, broadcastGameEnd, broadcastStart, getPartyCode, getPlayers, o
 import { BrawlGame } from './minigames/brawl.js';
 import { CollectGame } from './minigames/collect.js';
 import { VolcanoGame } from './minigames/volcano.js'; // Import new game
-import { ShellSprintGame } from './minigames/shell_sprint.js';
+import { FlappyFlockGame } from './minigames/flappy_flock.js';
+import { RoadRunnerGame } from './minigames/road_runner.js';
 import { CrabDodgeGame } from './minigames/crab_dodge.js';
 import { TankBattleGame } from './minigames/tank_battle.js';
 import { SkySlamGame } from './minigames/sky_slam.js';
@@ -19,6 +20,7 @@ const ui = {
     intro: document.getElementById('intro-card'),
     result: document.getElementById('result-card'),
     wheelElement: document.getElementById('wheel'),
+    wheelLegend: document.getElementById('wheel-legend'),
     timer: document.getElementById('game-timer'),
     title: document.getElementById('game-title'),
     desc: document.getElementById('game-desc'),
@@ -32,16 +34,28 @@ const ui = {
     resultStatus: document.getElementById('result-ready-status')
 };
 
-const minigameOrder = ['BRAWL', 'COLLECT', 'VOLCANO', 'SHELL', 'CRAB', 'TANK', 'SKY'];
+const minigameOrder = ['BRAWL', 'COLLECT', 'VOLCANO', 'CRAB', 'TANK', 'SKY', 'FLAPPY', 'RUNNER'];
 
 const minigames = {
     'BRAWL': new BrawlGame(),
     'COLLECT': new CollectGame(),
     'VOLCANO': new VolcanoGame(),
-    'SHELL': new ShellSprintGame(),
     'CRAB': new CrabDodgeGame(),
     'TANK': new TankBattleGame(),
-    'SKY': new SkySlamGame()
+    'SKY': new SkySlamGame(),
+    'FLAPPY': new FlappyFlockGame(),
+    'RUNNER': new RoadRunnerGame()
+};
+
+const minigameVisuals = {
+    'BRAWL': { title: 'Tiki Brawl', color: '#FF512F' },
+    'COLLECT': { title: 'Pineapple Rush', color: '#FFD700' },
+    'VOLCANO': { title: 'Magma Madness', color: '#800080' },
+    'CRAB': { title: 'Crab Dodge', color: '#FFA040' },
+    'TANK': { title: 'Tank Takedown', color: '#57c7ff' },
+    'SKY': { title: 'Sky Rink Showdown', color: '#8ECBFF' },
+    'FLAPPY': { title: 'Flappy Flock', color: '#00BCD4' },
+    'RUNNER': { title: 'Boardwalk Dash', color: '#4CAF50' }
 };
 
 const GameManager = {
@@ -79,14 +93,18 @@ const GameManager = {
         this.state = 'STARTING';
         ui.lobby.classList.remove('active');
         ui.wheel.classList.add('active');
-        const chosenGame = this.chooseNextGame();
-        const chosenIndex = minigameOrder.indexOf(chosenGame);
-        const slice = 360 / minigameOrder.length;
+        const wheelOptions = this.getAvailableGames();
+        this.renderWheel(wheelOptions);
+        const chosenGame = this.chooseNextGame(wheelOptions);
+        const chosenIndex = wheelOptions.indexOf(chosenGame);
+        const slice = 360 / wheelOptions.length;
         const randomOffset = Math.random() * slice;
         const targetAngle = chosenIndex * slice + randomOffset;
         const extraSpins = 5 + Math.random() * 2;
         const startRotation = this.currentRotation;
-        const finalRotation = startRotation + extraSpins * 360 + targetAngle;
+        const normalizedStart = ((startRotation % 360) + 360) % 360;
+        const rotationDelta = ((targetAngle - normalizedStart + 360) % 360) + extraSpins * 360;
+        const finalRotation = startRotation + rotationDelta;
         const duration = 3800;
         const start = performance.now();
 
@@ -94,7 +112,7 @@ const GameManager = {
             const t = Math.min((now - start) / duration, 1);
             const easeOut = 1 - Math.pow(1 - t, 3);
             const angle = startRotation + (finalRotation - startRotation) * easeOut;
-            this.currentRotation = angle;
+            this.currentRotation = angle % 360;
             ui.wheelElement.style.transform = `rotate(-${angle}deg)`;
             if (t < 1) requestAnimationFrame(animateSpin);
             else this.resolveWheel(chosenGame);
@@ -108,13 +126,56 @@ const GameManager = {
         this.setupMinigame(type);
     },
 
-    chooseNextGame() {
-        const available = minigameOrder.filter(type => !this.recentGames.includes(type));
-        const pool = available.length ? available : minigameOrder;
+    getAvailableGames() {
+        return minigameOrder.filter(type => !this.recentGames.includes(type));
+    },
+
+    chooseNextGame(availablePool = this.getAvailableGames()) {
+        const pool = availablePool.length ? availablePool : minigameOrder;
         const type = pool[Math.floor(Math.random() * pool.length)];
         this.recentGames.push(type);
         if (this.recentGames.length > 3) this.recentGames.shift();
         return type;
+    },
+
+    renderWheel(options) {
+        const slice = 360 / options.length;
+        const gradientParts = options.map((type, idx) => {
+            const start = idx * slice;
+            const end = start + slice;
+            return `${minigameVisuals[type].color} ${start}deg ${end}deg`;
+        }).join(', ');
+
+        ui.wheelElement.style.background = `conic-gradient(${gradientParts})`;
+        ui.wheelElement.innerHTML = '';
+
+        const fragment = document.createDocumentFragment();
+        options.forEach((type, idx) => {
+            const angle = idx * slice + slice / 2;
+            const label = document.createElement('div');
+            label.className = 'wheel-label';
+            label.style.setProperty('--angle', `${angle}deg`);
+            label.style.setProperty('--accent', minigameVisuals[type].color);
+            label.innerText = minigameVisuals[type].title;
+            fragment.appendChild(label);
+        });
+
+        ui.wheelElement.appendChild(fragment);
+
+        if (ui.wheelLegend) {
+            ui.wheelLegend.innerHTML = '';
+            const legendFrag = document.createDocumentFragment();
+            options.forEach(type => {
+                const item = document.createElement('div');
+                item.className = 'legend-item';
+                const swatch = document.createElement('span');
+                swatch.style.background = minigameVisuals[type].color;
+                item.appendChild(swatch);
+                item.appendChild(document.createTextNode(minigameVisuals[type].title));
+                legendFrag.appendChild(item);
+            });
+            ui.wheelLegend.appendChild(legendFrag);
+        }
     },
 
     setupMinigame(type) {
@@ -170,6 +231,9 @@ const GameManager = {
     },
 
     endGame(winnerSlot) {
+        if (this.currentMinigame && typeof this.currentMinigame.cleanup === 'function') {
+            this.currentMinigame.cleanup(this);
+        }
         this.state = 'RESULT';
         ui.timer.style.display = 'none';
         let text = '';
@@ -195,10 +259,12 @@ const GameManager = {
         const loserName = this.getPlayerName(loserSlot);
         if(this.currentGame === 'BRAWL') return `${loserName} drinks 1 sip`;
         if(this.currentGame === 'VOLCANO') return `${loserName} takes a SHOT (or 3 sips)`;
-        if(this.currentGame === 'COLLECT' || this.currentGame === 'SHELL') return `${loserName} drinks diff score`;
+        if(this.currentGame === 'COLLECT') return `${loserName} drinks diff score`;
         if(this.currentGame === 'CRAB') return `${loserName} drinks 1 sip`;
         if(this.currentGame === 'TANK') return `${loserName} drinks 3 sips`;
         if(this.currentGame === 'SKY') return `${loserName} finishes their drink`;
+        if(this.currentGame === 'FLAPPY') return `${loserName} drinks 2 sips`;
+        if(this.currentGame === 'RUNNER') return `${loserName} takes 2 sips`;
         return 'Drink up!';
     },
 
@@ -261,10 +327,10 @@ const GameManager = {
 
             if (!this.activeSlots.includes(slot)) return 'Spectating';
 
-            if(this.currentGame === 'COLLECT' || this.currentGame === 'SHELL') {
+            if(this.currentGame === 'COLLECT' || this.currentGame === 'FLAPPY') {
                 const score = this.scores[slot] || 0;
                 return `Score: ${score}`;
-            } else if(this.currentGame === 'BRAWL' || this.currentGame === 'VOLCANO' || this.currentGame === 'TANK') {
+            } else if(this.currentGame === 'BRAWL' || this.currentGame === 'VOLCANO' || this.currentGame === 'TANK' || this.currentGame === 'CRAB' || this.currentGame === 'RUNNER') {
                 const hp = playerMeshes[slot]?.hp ?? 0;
                 return `HP: ${hp}`;
             }
@@ -377,13 +443,19 @@ function processObjects(dt, meshes, manager) {
         else if (obj.type === 'crab') {
             obj.t += dt;
             obj.mesh.position.add(obj.vel.clone().multiplyScalar(dt));
-            obj.mesh.position.z += Math.sin(obj.t * 4) * dt * 1.5;
+            obj.mesh.position.z += Math.sin(obj.t * (obj.swaySpeed || 4.5)) * dt * (obj.swayAmp || 2.5);
             obj.mesh.rotation.z += dt * 4 * Math.sign(obj.vel.x);
             if (Math.abs(obj.mesh.position.x) > 14) { removeObj(i); continue; }
 
             if (manager.currentGame === 'CRAB') {
                 meshes.forEach(mesh => {
-                    if (mesh.visible && obj.mesh.position.distanceTo(mesh.position) < 1) { manager.eliminatePlayer(mesh.playerIndex); }
+                    if (mesh.visible && obj.mesh.position.distanceTo(mesh.position) < 1 && (!mesh.stunned || mesh.stunned <= 0)) {
+                        mesh.hp = Math.max(0, (mesh.hp ?? 0) - 1);
+                        mesh.stunned = 1.5;
+                        flashHit(mesh);
+                        manager.updateHud();
+                        if (mesh.hp <= 0) manager.eliminatePlayer(mesh.playerIndex);
+                    }
                 });
                 if (!manager.aliveSlots.some(slot => playerMeshes[slot].visible)) removeObj(i);
             }
@@ -445,13 +517,22 @@ function animate(time) {
         GameManager.timer += dt;
         ui.timer.innerText = Math.max(0, Math.floor(30 - GameManager.timer)).toString();
         // Time limit ends game (Player with most HP wins in Volcano/Brawl/Tank)
-        if(GameManager.timer >= 30 && GameManager.currentGame !== 'COLLECT' && GameManager.currentGame !== 'SHELL') {
-            if(GameManager.currentGame === 'BRAWL' || GameManager.currentGame === 'VOLCANO' || GameManager.currentGame === 'TANK') {
+        if(GameManager.timer >= 30 && GameManager.currentGame !== 'COLLECT') {
+            if(GameManager.currentGame === 'BRAWL' || GameManager.currentGame === 'VOLCANO' || GameManager.currentGame === 'TANK' || GameManager.currentGame === 'CRAB' || GameManager.currentGame === 'RUNNER') {
                 let bestSlot = null; let bestHp = -Infinity; let tie = false;
                 GameManager.activeSlots.forEach(slot => {
                     const hp = playerMeshes[slot]?.hp ?? 0;
                     if (hp > bestHp) { bestHp = hp; bestSlot = slot; tie = false; }
                     else if (hp === bestHp) { tie = true; }
+                });
+                if (!tie && bestSlot !== null) GameManager.endGame(bestSlot);
+                else GameManager.endGame(null);
+            } else if (GameManager.currentGame === 'FLAPPY') {
+                let bestSlot = null; let bestScore = -Infinity; let tie = false;
+                GameManager.activeSlots.forEach(slot => {
+                    const score = GameManager.scores[slot] || 0;
+                    if (score > bestScore) { bestScore = score; bestSlot = slot; tie = false; }
+                    else if (score === bestScore) { tie = true; }
                 });
                 if (!tie && bestSlot !== null) GameManager.endGame(bestSlot);
                 else GameManager.endGame(null);

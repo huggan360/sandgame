@@ -39,10 +39,11 @@ function setupControllerButtons(prefillCode) {
         BRAWL: { title: 'Brawl', help: 'Move to aim and tap to fire tiki shots.', actionLabel: 'Fire', showAction: true, crosshair: false },
         COLLECT: { title: 'Pineapple Rush', help: 'Sprint between pineapples and drop-offs.', actionLabel: 'Grab/Drop', showAction: false, crosshair: false },
         VOLCANO: { title: 'Magma Madness', help: 'Keep moving to avoid eruptions. No action button needed.', actionLabel: 'Action', showAction: false, crosshair: false },
-        SHELL: { title: 'Shell Sprint', help: 'Aim for shells. Boost when the time is right.', actionLabel: 'Boost', showAction: false, crosshair: false },
         CRAB: { title: 'Crab Dodge', help: 'Slide around the crabs — movement only.', actionLabel: 'Action', showAction: false, crosshair: false },
         TANK: { title: 'Tank Takedown', help: 'Aim your turret with the stick. Tap to fire.', actionLabel: 'Fire Cannon', showAction: true, crosshair: false },
         SKY: { title: 'Sky Rink', help: 'Skate fast and body check foes off the edge.', actionLabel: 'Body Check', showAction: true, crosshair: false },
+        FLAPPY: { title: 'Flappy Flock', help: 'Tap to flap. No joystick needed.', actionLabel: 'Flap', showAction: true, hideStick: true, crosshair: false },
+        RUNNER: { title: 'Boardwalk Dash', help: 'Slide left and right to dodge crates.', actionLabel: 'Dodge', showAction: false, crosshair: false },
         SHOOTING: { title: 'Shooter', help: 'Aim carefully and fire straight ahead.', actionLabel: 'Shoot', showAction: true, crosshair: false }
     };
 
@@ -159,7 +160,9 @@ function setupControllerButtons(prefillCode) {
 
         const showAction = config.showAction !== false;
         if (fireBtn) {
-            fireBtn.style.display = showAction ? 'inline-block' : 'none';
+            fireBtn.style.display = 'inline-block';
+            fireBtn.style.visibility = showAction ? 'visible' : 'hidden';
+            fireBtn.style.pointerEvents = showAction ? 'auto' : 'none';
             fireBtn.textContent = config.actionLabel || 'Action';
         }
 
@@ -169,6 +172,11 @@ function setupControllerButtons(prefillCode) {
         }
 
         if (pad) pad.classList.toggle('movement-only', !showAction);
+
+        if (joystick) {
+            joystick.style.display = config.hideStick ? 'none' : 'block';
+            if (config.hideStick) resetThumb();
+        }
     };
 
     applyControllerLayout();

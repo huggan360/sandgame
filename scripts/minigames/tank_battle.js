@@ -53,6 +53,16 @@ export class TankBattleGame {
         createDriftwood(0, 5, 2.8, Math.PI / 3);
     }
 
+    positionHitsObstacle(pos) {
+        for (const obj of gameObjects) {
+            if (obj.type === 'obstacle') {
+                const dist = Math.hypot(pos.x - obj.mesh.position.x, pos.z - obj.mesh.position.z);
+                if (dist < 1.4) return true;
+            }
+        }
+        return false;
+    }
+
     handleMovement(dt, inputs, players, manager) {
         const speed = 6 * dt;
         players.forEach((mesh, idx) => {
@@ -63,9 +73,36 @@ export class TankBattleGame {
                 return;
             }
             if (input.x !== 0 || input.z !== 0) {
-                mesh.position.x += input.x * speed;
-                mesh.position.z += input.z * speed;
-                mesh.lookAt(mesh.position.x + input.x, mesh.position.y, mesh.position.z + input.z);
+                const desired = mesh.position.clone();
+                desired.x += input.x * speed;
+                desired.z += input.z * speed;
+
+                const original = mesh.position.clone();
+                let moved = false;
+
+                if (!this.positionHitsObstacle(desired)) {
+                    mesh.position.copy(desired);
+                    moved = true;
+                } else {
+                    const stepX = original.clone();
+                    stepX.x += input.x * speed;
+                    if (!this.positionHitsObstacle(stepX)) {
+                        mesh.position.copy(stepX);
+                        moved = true;
+                    }
+
+                    const stepZ = original.clone();
+                    stepZ.z += input.z * speed;
+                    if (!moved && !this.positionHitsObstacle(stepZ)) {
+                        mesh.position.copy(stepZ);
+                        moved = true;
+                    }
+                }
+
+                if (moved) {
+                    const dir = mesh.position.clone().sub(original);
+                    mesh.lookAt(mesh.position.x + dir.x, mesh.position.y, mesh.position.z + dir.z);
+                }
             }
             mesh.position.clamp(
                 new THREE.Vector3(-manager.boundaryLimit, 0, -manager.boundaryLimit),

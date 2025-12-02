@@ -8,14 +8,14 @@ export class CrabDodgeGame {
     get meta() {
         return {
             title: 'Crab Dodge',
-            description: 'Sidestep the sideways crabs! Getting pinched knocks you out.',
+            description: 'Sidestep the sideways crabs! Take 3 pinches before you’re out.',
             penalty: '1 Sip'
         };
     }
 
     start(players) {
         this.spawnTimer = 0.8;
-        players.forEach(p => p.hp = 1);
+        players.forEach(p => p.hp = 3);
         spawnCrab();
     }
 

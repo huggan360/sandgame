@@ -223,19 +223,30 @@
         
         #wheel {
             width: 300px; height: 300px; border-radius: 50%; border: 8px solid white;
-            /* 8 Slice Conic Gradient */
-            background: conic-gradient(
-                #FF512F 0deg 45deg,     /* Brawl */
-                #228B22 45deg 90deg,    /* Survival */
-                #FFD700 90deg 135deg,   /* Collect */
-                #800080 135deg 180deg,  /* Volcano (Purple/Dark) */
-                #00BCD4 180deg 225deg,  /* Shell Sprint */
-                #FFA040 225deg 270deg,  /* Crab Dodge */
-                #57c7ff 270deg 315deg,  /* Tank Takedown */
-                #8ECBFF 315deg 360deg   /* Sky Rink */
-            );
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             transition: none;
             box-shadow: 0 0 30px rgba(0,0,0,0.5);
+        }
+
+        .wheel-label {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 120px;
+            text-align: center;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            color: #0b1020;
+            background: rgba(255,255,255,0.9);
+            padding: 6px 8px;
+            border-radius: 10px;
+            transform: translate(-50%, -50%) rotate(var(--angle)) translateY(-120px) rotate(calc(-1 * var(--angle)));
+            box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+            border: 2px solid var(--accent, #fff);
+            text-shadow: 0 1px 1px rgba(255,255,255,0.7);
         }
         
         #pointer {
@@ -251,6 +262,7 @@
 
         .wheel-legend {
             display: flex; gap: 20px; color: white; margin-top: 20px; font-weight: bold; text-shadow: 1px 1px 2px black;
+            flex-wrap: wrap; justify-content: center;
         }
         .legend-item span { display: inline-block; width: 15px; height: 15px; margin-right: 5px; border: 2px solid white; }
 
@@ -383,7 +395,7 @@
             justify-content: space-between;
         }
 
-        #controller-pad.movement-only { justify-content: center; }
+        #controller-pad.movement-only { justify-content: space-between; }
 
         #controller-screen.started #controller-pad { display: flex; }
 
@@ -520,7 +532,7 @@
                     <div class="joystick-ring"></div>
                     <div id="joystick-thumb"></div>
                 </div>
-                <button class="pad-btn" id="fire-btn" aria-label="Fire">🔥 FIRE</button>
+                <button class="pad-btn" id="fire-btn" aria-label="Fire">FIRE</button>
             </div>
         </div>
 
@@ -548,15 +560,7 @@
                 <div id="pointer"></div>
                 <div id="wheel"></div>
             </div>
-            <div class="wheel-legend">
-                <div class="legend-item"><span style="background: #FF512F;"></span>BRAWL</div>
-                <div class="legend-item"><span style="background: #FFD700;"></span>COLLECT</div>
-                <div class="legend-item"><span style="background: #800080;"></span>VOLCANO</div>
-                <div class="legend-item"><span style="background: #00BCD4;"></span>SHELL SPRINT</div>
-                <div class="legend-item"><span style="background: #FFA040;"></span>CRAB DODGE</div>
-                <div class="legend-item"><span style="background: #57c7ff;"></span>TANK TAKEDOWN</div>
-                <div class="legend-item"><span style="background: #8ECBFF;"></span>SKY RINK</div>
-            </div>
+            <div class="wheel-legend" id="wheel-legend"></div>
         </div>
 
         <!-- Lobby UI -->
@@ -565,11 +569,6 @@
             <p style="color: #aaa;" id="party-status">Waiting for phones to join…</p>
             <div id="party-panel"></div>
             <div id="party-code"></div>
-            <div class="controls-hint">
-                <div style="font-weight:bold;">Keyboard fallback</div>
-                <div>P1: <span class="key">WASD</span> + <span class="key">SPACE</span></div>
-                <div>P2: <span class="key">ARROWS</span> + <span class="key">ENTER</span></div>
-            </div>
         </div>
 
         <!-- Result UI -->
