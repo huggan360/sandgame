@@ -277,9 +277,6 @@ export function sendChosenGame(game) {
     }
 }
 
-// Explicit export map to ensure availability for module consumers
-export { onChooseGameRequest };
-
 export function setControllerReady(ready) {
     if (role !== 'controller') return;
     controllerState.ready = ready;
