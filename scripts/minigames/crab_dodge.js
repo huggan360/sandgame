@@ -7,7 +7,7 @@ export class CrabDodgeGame {
 
     get meta() {
         return {
-            title: 'Orange Dodge',
+            title: 'Crab Dodge',
             description: 'Sidestep the sideways crabs! Getting pinched knocks you out.',
             penalty: '1 Sip'
         };
