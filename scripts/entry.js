@@ -35,9 +35,11 @@ function setupControllerButtons(prefillCode) {
     const colorChoices = document.querySelectorAll('[data-controller-color]');
     const modeButtons = document.querySelectorAll('[data-mode-choice]');
     const modeStatus = document.getElementById('mode-status');
+    const modePanel = document.getElementById('mode-panel');
     const gameChoicePanel = document.getElementById('game-choice-panel');
     const gameChoiceList = document.getElementById('game-choice-list');
     const choiceHint = document.getElementById('choice-hint');
+    const leaderboardToggle = document.getElementById('leaderboard-toggle');
     let selectedColor = null;
     const controllerLayouts = {
         DEFAULT: { title: 'Standard Controls', help: 'Use the joystick to move. Action appears when a game needs it.', actionLabel: 'Action', showAction: false, crosshair: false },
@@ -65,6 +67,7 @@ function setupControllerButtons(prefillCode) {
     let isLeader = false;
     let partyMode = 'RANDOM';
     let selfId = null;
+    let leaderboardOpen = false;
 
     const updateModeUI = () => {
         modeButtons?.forEach(btn => {
@@ -77,7 +80,7 @@ function setupControllerButtons(prefillCode) {
             modeStatus.textContent = isLeader ? 'You are party leader. Choose how rounds are picked.' : 'Leader decides if rounds are random or chosen.';
         }
         if (gameChoicePanel) gameChoicePanel.classList.toggle('not-leader', !isLeader);
-        if (partyMode === 'RANDOM') gameChoicePanel?.classList.add('hidden');
+        if (partyMode === 'RANDOM') gameChoicePanel?.classList.remove('active');
     };
 
     const setSelectedColor = (color) => {
@@ -114,6 +117,7 @@ function setupControllerButtons(prefillCode) {
         readyBtn.classList.remove('ready');
         readyBtn.innerText = 'Tap Ready';
         readyBtn.disabled = false;
+        if (modePanel) modePanel.style.display = 'block';
     };
 
     const renderLeaderboard = (entries, selfId) => {
@@ -137,7 +141,11 @@ function setupControllerButtons(prefillCode) {
             row.appendChild(scoreSpan);
             leaderboardList.appendChild(row);
         });
-        if (leaderboardCard && entries.length) leaderboardCard.classList.add('active');
+        if (leaderboardCard) {
+            leaderboardCard.dataset.hasData = entries.length ? 'true' : 'false';
+            if (leaderboardOpen && entries.length) leaderboardCard.classList.add('active');
+            else leaderboardCard.classList.remove('active');
+        }
     };
 
     codeForm?.addEventListener('submit', async (e) => {
@@ -180,6 +188,7 @@ function setupControllerButtons(prefillCode) {
                 // Hide gamepad in lobby, only show ready button
                 if (pad) pad.style.display = 'none';
             }
+            if (modePanel) modePanel.style.display = 'block';
         } catch (err) {
             console.error(err);
             statusLine.textContent = 'Could not join. Try a different nickname?';
@@ -288,6 +297,16 @@ function setupControllerButtons(prefillCode) {
         fireBtn?.addEventListener(evt, () => setAction(false));
     });
 
+    const setLeaderboardVisible = (visible) => {
+        leaderboardOpen = visible;
+        leaderboardCard?.classList.toggle('active', visible);
+        if (leaderboardToggle) leaderboardToggle.textContent = visible ? '▾' : '▴';
+    };
+
+    leaderboardToggle?.addEventListener('click', () => {
+        setLeaderboardVisible(!leaderboardOpen);
+    });
+
     onPartyStateChange(({ mode, leaderId }) => {
         partyMode = mode || 'RANDOM';
         isLeader = leaderId && selfId ? leaderId === selfId : isLeader;
@@ -307,12 +326,14 @@ function setupControllerButtons(prefillCode) {
             btn.addEventListener('click', () => {
                 if (!isLeader) return;
                 sendChosenGame(key);
-                gameChoicePanel.classList.add('hidden');
+                gameChoicePanel.classList.remove('active');
+                gameChoicePanel.classList.remove('hidden');
             });
             gameChoiceList.appendChild(btn);
         });
         if (choiceHint) choiceHint.textContent = isLeader ? 'Pick the next minigame.' : 'Leader is choosing the next game…';
         gameChoicePanel.classList.remove('hidden');
+        gameChoicePanel.classList.add('active');
     });
 
     onControllerStart((details) => {
@@ -327,7 +348,8 @@ function setupControllerButtons(prefillCode) {
         if (joinCard) joinCard.style.display = 'none';
         if (status) status.style.display = 'none';
         if (readyBtn) readyBtn.style.display = 'none';
-        gameChoicePanel?.classList.add('hidden');
+        if (modePanel) modePanel.style.display = 'none';
+        gameChoicePanel?.classList.remove('active');
         applyControllerLayout(gameType);
     });
 
@@ -338,6 +360,7 @@ function setupControllerButtons(prefillCode) {
         if (pad) pad.style.display = 'none';
         if (controls) controls.style.display = 'block';
         if (readyBtn) readyBtn.style.display = 'block';
+        if (modePanel) modePanel.style.display = 'block';
         setReadyWaiting();
         if (statusCard) statusCard.style.display = 'block';
         if (statusLine) statusLine.textContent = 'Game finished! Tap ready for the next round.';

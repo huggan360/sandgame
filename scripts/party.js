@@ -157,8 +157,9 @@ function handleControllerMessage(conn, msg) {
         if (conn.peer === leaderId) setPartyMode(msg.mode, conn.peer);
     } else if (msg.type === 'choose-game-choice') {
         if (conn.peer !== leaderId || !choiceResolver) return;
+        const resolver = choiceResolver;
         clearChoiceResolver();
-        choiceResolver(msg.game);
+        resolver(msg.game);
     }
 }
 

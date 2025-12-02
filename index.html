@@ -153,7 +153,7 @@
 
         #game-timer { font-size: 2rem; color: #dff6ff; font-weight: bold; text-shadow: 2px 2px 10px rgba(0,0,0,0.6); display: none; position: absolute; top: 16px; right: 24px; padding: 10px 18px; border-radius: 14px; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.15); }
 
-        h1 { margin: 0; font-size: 3rem; color: #FFD700; -webkit-text-stroke: 1px #B8860B; }
+        h1 { margin: 0; font-size: 3rem; color: #ffffff; -webkit-text-stroke: 1px rgba(0,0,0,0.15); }
         h2 { margin: 10px 0; font-size: 1.5rem; color: white; }
 
         #lobby-card {
@@ -165,7 +165,7 @@
             padding: 26px 30px;
         }
 
-        .lobby-meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 6px 0 10px; }
+        .lobby-meta { display: flex; justify-content: center; align-items: center; gap: 12px; flex-wrap: wrap; margin: 6px 0 10px; }
         .mode-pill {
             display: flex;
             align-items: center;
@@ -175,10 +175,11 @@
             background: rgba(255,255,255,0.06);
             border: 1px solid rgba(255,255,255,0.12);
             box-shadow: 0 12px 24px rgba(0,0,0,0.25);
+            color: #fff;
         }
         .mode-pill .chip-dot { width: 12px; height: 12px; border-radius: 50%; background: #31ffb0; box-shadow: 0 0 8px #31ffb0; }
-        .mode-label { font-weight: 800; letter-spacing: 0.05em; }
-        .mode-blurb { color: #cdd9e5; font-size: 0.9rem; }
+        .mode-label { font-weight: 800; letter-spacing: 0.05em; color: #fff; }
+        .mode-blurb { color: #f3f6ff; font-size: 0.9rem; }
         .leader-label {
             padding: 10px 12px;
             border-radius: 12px;
@@ -551,14 +552,25 @@
         #mode-status { color: #cdd9e5; font-size: 0.95rem; margin-top: 6px; }
 
         #game-choice-panel {
-            margin-top: 12px;
-            padding: 12px;
-            border-radius: 14px;
-            background: rgba(0,0,0,0.35);
-            border: 1px solid rgba(255,255,255,0.1);
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.55);
+            backdrop-filter: blur(6px);
+            z-index: 50;
         }
-        #game-choice-panel.hidden { display: none; }
+        #game-choice-panel.active { display: flex; }
         #game-choice-panel.not-leader { opacity: 0.7; }
+        #game-choice-panel .choice-card {
+            width: min(480px, 92vw);
+            background: rgba(15,25,45,0.9);
+            border: 1px solid rgba(255,255,255,0.16);
+            border-radius: 18px;
+            box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+            padding: 18px;
+        }
         .choice-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
@@ -578,9 +590,35 @@
         .choice-btn:disabled { opacity: 0.6; }
         #choice-hint { color: #cdd9e5; font-size: 0.9rem; margin-top: 6px; }
 
-        #controller-leaderboard { display: none; }
+        #leaderboard-toggle {
+            position: fixed;
+            right: 16px;
+            bottom: 16px;
+            z-index: 40;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(8px);
+            color: #fff;
+            font-weight: 800;
+        }
+        #controller-leaderboard {
+            position: fixed;
+            right: 16px;
+            bottom: 60px;
+            width: min(320px, 80vw);
+            background: rgba(10, 18, 34, 0.8);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 16px;
+            padding: 12px;
+            box-shadow: 0 18px 40px rgba(0,0,0,0.35);
+            backdrop-filter: blur(10px);
+            display: none;
+            z-index: 35;
+        }
         #controller-leaderboard.active { display: block; }
-        .leaderboard-title { font-weight: 800; margin-bottom: 10px; letter-spacing: 0.02em; }
+        .leaderboard-title { font-weight: 800; margin-bottom: 10px; letter-spacing: 0.02em; color: #e8f1ff; }
         .leaderboard-list { display: flex; flex-direction: column; gap: 8px; }
         .leaderboard-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-radius: 12px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.1); }
         .leaderboard-row .badge { width: 14px; height: 14px; border-radius: 50%; margin-right: 8px; box-shadow: 0 0 10px currentColor; }
@@ -647,7 +685,7 @@
                 <div id="controller-layout-help">Use the joystick to move. Action buttons change per game.</div>
             </div>
             <button id="ready-toggle" class="waiting" disabled>Tap Ready</button>
-            <div class="mode-panel">
+            <div class="mode-panel" id="mode-panel">
                 <div class="layout-header">
                     <div style="font-weight:800; letter-spacing:0.05em;">Game Mode</div>
                     <div id="mode-status">Leader decides how rounds start.</div>
@@ -657,12 +695,14 @@
                     <button type="button" class="mode-btn" data-mode-choice="CHOOSE">Choose</button>
                 </div>
             </div>
-            <div id="game-choice-panel" class="hidden">
-                <div class="layout-header">
-                    <div style="font-weight:800; letter-spacing:0.05em;">Pick the next minigame</div>
-                    <div id="choice-hint">Leader is choosing…</div>
+            <div id="game-choice-panel">
+                <div class="choice-card">
+                    <div class="layout-header">
+                        <div style="font-weight:800; letter-spacing:0.05em;">Pick the next minigame</div>
+                        <div id="choice-hint">Leader is choosing…</div>
+                    </div>
+                    <div id="game-choice-list" class="choice-grid"></div>
                 </div>
-                <div id="game-choice-list" class="choice-grid"></div>
             </div>
             <div id="controller-pad">
                 <div id="joystick">
@@ -673,6 +713,7 @@
             </div>
         </div>
 
+        <button id="leaderboard-toggle" aria-label="Toggle leaderboard">▴</button>
         <div class="controller-card" id="controller-leaderboard">
             <div class="leaderboard-title">Leaderboard</div>
             <div class="leaderboard-list" id="leaderboard-list"></div>
