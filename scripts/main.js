@@ -172,9 +172,6 @@ const GameManager = {
     },
 
     endGame(winnerSlot) {
-        if (this.currentMinigame && typeof this.currentMinigame.cleanup === 'function') {
-            this.currentMinigame.cleanup(this);
-        }
         this.state = 'RESULT';
         ui.timer.style.display = 'none';
         let text = '';

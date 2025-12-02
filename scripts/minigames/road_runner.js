@@ -2,14 +2,15 @@ import { mats, gameObjects, scene, removeObj, flashHit } from '../scene.js';
 
 export class RoadRunnerGame {
     constructor() {
+        this.allowClampAfterMovement = false;
         this.spawnTimer = 1.2;
-        this.baseSpeed = 10;
+        this.baseSpeed = 9;
     }
 
     get meta() {
         return {
-            title: 'Road Runner',
-            description: 'Dodge the incoming obstacles. Last one standing wins.',
+            title: 'Boardwalk Dash',
+            description: 'Slide side to side to dodge oncoming crates. Last survivor wins.',
             penalty: '2 Sips',
             environment: 'RUNNER'
         };
@@ -18,40 +19,38 @@ export class RoadRunnerGame {
     start(players, manager) {
         this.spawnTimer = 1.2;
         manager.setBoundaryLimit(null);
-        const numPlayers = players.length;
-        const spacing = 4;
-        const startX = - (numPlayers - 1) * spacing / 2;
-
         players.forEach((mesh, idx) => {
-            mesh.position.set(startX + idx * spacing, 0, -8);
+            mesh.position.set(0, 0, -8 + idx * 0.01);
             mesh.rotation.set(0, 0, 0);
+            mesh.lookAt(mesh.position.x, mesh.position.y, mesh.position.z + 10);
             mesh.hp = 3;
             mesh.stunned = 0;
+            mesh.slideVel = new THREE.Vector3();
         });
         manager.updateHud();
     }
 
     handleMovement(dt, inputs, players) {
-        const moveSpeed = 12 * dt;
+        const moveSpeed = 10 * dt;
         players.forEach((mesh, idx) => {
             const input = inputs[idx] || {};
             mesh.stunned = Math.max(0, (mesh.stunned || 0) - dt);
-            if (mesh.stunned > 0 || mesh.hp <= 0) return;
-
-            mesh.position.x += (input.x || 0) * moveSpeed;
-            mesh.position.x = Math.max(-12, Math.min(12, mesh.position.x));
+            if (mesh.stunned > 0) return;
+            mesh.position.x += (input.x || 0) * moveSpeed * 3;
+            mesh.position.x = Math.max(-6, Math.min(6, mesh.position.x));
+            mesh.position.z = -8 + idx * 0.01;
             mesh.lookAt(mesh.position.x, mesh.position.y, mesh.position.z + 12);
         });
     }
 
     spawnObstacle(timer) {
-        const lane = (Math.random() - 0.5) * 24;
-        const width = 1 + Math.random() * 1.5;
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, 1.5, 1.5), mats.crate);
-        mesh.position.set(lane, 0.75, 26);
+        const lane = (Math.floor(Math.random() * 5) - 2) * 2;
+        const size = 1 + Math.random() * 0.5;
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), mats.crate);
+        mesh.position.set(lane, size / 2, 26);
         mesh.castShadow = true;
         scene.add(mesh);
-        const speed = this.baseSpeed + (timer || 0) * 0.3 + (Math.random() - 0.5) * 4;
+        const speed = this.baseSpeed + (timer || 0) * 0.3;
         gameObjects.push({ type: 'runner_obstacle', mesh, speed });
     }
 
@@ -69,7 +68,7 @@ export class RoadRunnerGame {
                 if (!mesh.visible || mesh.hp <= 0) return;
                 const dx = Math.abs(mesh.position.x - obj.mesh.position.x);
                 const dz = Math.abs(mesh.position.z - obj.mesh.position.z);
-                if (dx < (1.2 + 0.5) && dz < (1.2 + 0.5)) {
+                if (dx < 1.2 && dz < 1.2) {
                     mesh.hp = Math.max(0, (mesh.hp || 0) - 1);
                     flashHit(mesh);
                     mesh.stunned = 0.6;
@@ -87,7 +86,7 @@ export class RoadRunnerGame {
         this.spawnTimer -= dt;
         if (this.spawnTimer <= 0) {
             this.spawnObstacle(timer);
-            this.spawnTimer = Math.max(0.4, 1.2 - timer * 0.03);
+            this.spawnTimer = Math.max(0.5, 1.3 - timer * 0.02);
         }
 
         this.handleMovement(dt, inputs, players);
@@ -95,8 +94,8 @@ export class RoadRunnerGame {
 
         if (manager.state !== 'PLAYING') return;
 
-        if (manager.aliveSlots.length <= 1 && players.length > 1) {
-            manager.endGame(manager.aliveSlots[0] ?? null);
+        if (manager.aliveSlots.length === 1) {
+            manager.endGame(manager.aliveSlots[0]);
         } else if (manager.aliveSlots.length === 0) {
             manager.endGame(null);
         }
